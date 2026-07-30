@@ -5,18 +5,17 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2020"],
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "src",
     "strict": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "checkJs": false,
-    "paths": {
-      "@/*": ["./*", "./dist/*"]
-    }
   },
-  "include": ["**/*.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

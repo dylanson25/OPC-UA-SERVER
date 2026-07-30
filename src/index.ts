@@ -1,25 +1,7 @@
 import { OPCUAServer } from 'node-opcua';
-import { SetUpPlcDevice, SetUpPlcTPDevice } from './devices/index.js';
-import { serverOptions } from './server-config.js';
-
-interface SessionLike {
-  channel?: {
-    remoteAddress?: string;
-    remotePort?: number;
-  };
-  _secureChannel?: {
-    remoteAddress?: string;
-    remotePort?: number;
-  };
-  session?: {
-    channel?: {
-      remoteAddress?: string;
-      remotePort?: number;
-    };
-  };
-  sessionName?: string;
-  sessionId?: string | number;
-}
+import { serverOptions } from './config/server-config.js';
+import { loadDevices } from './devices/index.js';
+import type { SessionLike } from './types/index.js';
 
 const server = new OPCUAServer(serverOptions);
 
@@ -27,14 +9,15 @@ function buildAddressSpace(): void {
   const addressSpace = server.engine.addressSpace;
   const namespace = addressSpace.getOwnNamespace();
 
-  SetUpPlcDevice(addressSpace, namespace);
-  SetUpPlcTPDevice(addressSpace, namespace);
+  loadDevices(addressSpace, namespace);
 }
 
 function describeSessionClient(session: SessionLike): string {
   const channel =
     session.channel || session._secureChannel || session.session?.channel;
+
   const name = session.sessionName ?? session.sessionId?.toString();
+
   return channel
     ? `${name} client:${channel.remoteAddress}:${channel.remotePort}`
     : name ?? 'unknown';
@@ -54,6 +37,7 @@ function startServer(): void {
   server.start(() => {
     const endpointUrl =
       server.endpoints[0].endpointDescriptions()[0].endpointUrl;
+
     console.log('Server listening (Ctrl+C to stop)');
     console.log('port:', server.endpoints[0].port);
     console.log('endpoint:', endpointUrl);

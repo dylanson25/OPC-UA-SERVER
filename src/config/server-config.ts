@@ -1,3 +1,4 @@
+import type { ServerOptions } from '../types/server.js';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -7,18 +8,7 @@ const resourcePath = process.env.RESOURCEPATH || '/UA/';
 const hostname = process.env.HOSTNAME || '127.0.0.1';
 const productName = process.env.PRODUCTNAME || 'OPCUA-Server';
 
-export interface ServerBuildInfo {
-  productName: string;
-  buildNumber: string;
-  buildDate: Date;
-}
 
-export interface ServerOptions {
-  port: number;
-  resourcePath: string;
-  hostname: string;
-  buildInfo: ServerBuildInfo;
-}
 
 export const serverOptions: ServerOptions = {
   port: port,

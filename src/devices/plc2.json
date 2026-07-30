@@ -1,0 +1,12 @@
+{
+  "name": "PLC 2",
+  "nodeId": "ns=1;s=PLC2",
+  "tags": [
+    {
+      "type": "boolean",
+      "browseName": "Pump Running",
+      "nodeId": "ns=1;s=PLC2.PumpRunning",
+      "initialValue": true
+    }
+  ]
+}
