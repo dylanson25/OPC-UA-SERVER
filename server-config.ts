@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const port = process.env.PORT ? parseInt(process.env.PORT) : 59100;
+const port = process.env.PORT ? parseInt(process.env.PORT) : 4840;
 const resourcePath = process.env.RESOURCEPATH || '/UA/';
 const hostname = process.env.HOSTNAME || '127.0.0.1';
 const productName = process.env.PRODUCTNAME || 'OPCUA-Server';
