@@ -8,13 +8,18 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "node-opcua-samples": "^2.169.0"
   },
   "devDependencies": {
-    "prettier": "3.9.6"
+    "@types/node": "^26.1.2",
+    "prettier": "3.9.6",
+    "typescript": "^7.0.2"
   }
 }
