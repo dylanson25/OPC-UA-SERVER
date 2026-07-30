@@ -14,6 +14,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "node-opcua-samples": "^2.169.0"
   },
   "devDependencies": {

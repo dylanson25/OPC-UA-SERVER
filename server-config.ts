@@ -1,9 +1,31 @@
-export const serverOptions = {
-  port: 4841,
-  resourcePath: '/UA/',
-  hostname: '127.0.0.1',
+import * as dotenv from 'dotenv';
+
+dotenv.config();
+
+const port = process.env.PORT ? parseInt(process.env.PORT) : 59100;
+const resourcePath = process.env.RESOURCEPATH || '/UA/';
+const hostname = process.env.HOSTNAME || '127.0.0.1';
+const productName = process.env.PRODUCTNAME || 'OPCUA-Server';
+
+export interface ServerBuildInfo {
+  productName: string;
+  buildNumber: string;
+  buildDate: Date;
+}
+
+export interface ServerOptions {
+  port: number;
+  resourcePath: string;
+  hostname: string;
+  buildInfo: ServerBuildInfo;
+}
+
+export const serverOptions: ServerOptions = {
+  port: port,
+  resourcePath: resourcePath,
+  hostname: hostname,
   buildInfo: {
-    productName: 'OPC_UA_Server_NodeJS',
+    productName: productName,
     buildNumber: '7658',
     buildDate: new Date(2026, 5, 2),
   },
