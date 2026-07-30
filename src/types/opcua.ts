@@ -1,16 +1,5 @@
-export interface AddressSpaceLike {
-    rootFolder: {
-        objects: object;
-    };
-}
+import type { IAddressSpace, INamespace } from 'node-opcua-address-space-base';
 
-export interface NamespaceLike {
-    addObject(options: {
-        browseName: string;
-        organizedBy: object | string;
-    }): {
-        browseName: string;
-    };
-
-    addVariable(options: unknown): unknown;
-}
+/** Project aliases to the concrete node-opcua runtime types */
+export type AddressSpaceLike = IAddressSpace;
+export type NamespaceLike = INamespace;

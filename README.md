@@ -19,7 +19,15 @@ A lightweight OPC UA server (built with [node-opcua](https://www.npmjs.com/packa
 ## Running the server
 
 ```bash
-node index.js
+npm install
+npm run build
+npm start
+```
+
+For development, use:
+
+```bash
+npm run dev
 ```
 
 If it starts correctly you'll see something like:
@@ -32,9 +40,9 @@ endpoint: opc.tcp://<hostname>:4080/UA/
 
 Stop the server with `Ctrl+C`.
 
-## Parameters you will likely need to adjust
+## Configuration
 
-All server settings live in **`server-config.js`**.
+All server settings live in `src/config/server-config.ts`.
 
 | Parameter             | Current value      | What to change it to                                                                                                                                                                        |
 | --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

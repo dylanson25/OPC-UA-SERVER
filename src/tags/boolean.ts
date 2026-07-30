@@ -1,5 +1,5 @@
 import * as opcua from 'node-opcua';
-import type { BooleanTagParams } from '../types/index.d.ts';
+import type { BooleanTagParams } from '../types/index.ts';
 /**
  * Returns an "HH:MM:SS.mmm" timestamp for change-log lines.
  */
