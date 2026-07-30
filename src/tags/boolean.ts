@@ -1,19 +1,5 @@
 import * as opcua from 'node-opcua';
-
-interface BooleanTagParams {
-  addressSpace: unknown;
-  namespace: {
-    addVariable: (options: unknown) => unknown;
-  };
-  device: {
-    browseName: string;
-  };
-  nodeId: string;
-  browseName: string;
-  initialValue?: boolean;
-  minimumSamplingInterval?: number;
-}
-
+import type { BooleanTagParams } from '../types/index.d.ts';
 /**
  * Returns an "HH:MM:SS.mmm" timestamp for change-log lines.
  */

@@ -1,25 +1,5 @@
-import { addBooleanTag } from './boolean-tag.js';
-
-interface TagDefinition {
-  nodeId: string;
-  browseName: string;
-}
-
-interface AddressSpaceLike {
-  rootFolder: {
-    objects: object;
-  };
-}
-
-type NamespaceLike = {
-  addObject: (options: {
-    browseName: string;
-    organizedBy: object | string;
-  }) => {
-    browseName: string;
-  };
-  addVariable: (options: unknown) => unknown;
-};
+import { addBooleanTag } from '../tags/index.js';
+import type { TagDefinition, AddressSpaceLike, NamespaceLike } from '../types/index.d.ts';
 
 /**
  *  Add/remove tags here only

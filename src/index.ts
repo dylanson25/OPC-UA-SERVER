@@ -1,25 +1,8 @@
 import { OPCUAServer } from 'node-opcua';
 import { SetUpPlcDevice, SetUpPlcTPDevice } from './devices/index.js';
-import { serverOptions } from './server-config.js';
+import { serverOptions } from './config/server-config.js';
+import type { SessionLike } from './types/index.d.ts';
 
-interface SessionLike {
-  channel?: {
-    remoteAddress?: string;
-    remotePort?: number;
-  };
-  _secureChannel?: {
-    remoteAddress?: string;
-    remotePort?: number;
-  };
-  session?: {
-    channel?: {
-      remoteAddress?: string;
-      remotePort?: number;
-    };
-  };
-  sessionName?: string;
-  sessionId?: string | number;
-}
 
 const server = new OPCUAServer(serverOptions);
 
