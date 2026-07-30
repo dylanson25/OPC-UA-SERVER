@@ -20,7 +20,7 @@ function describeSessionClient(session: SessionLike): string {
 
   return channel
     ? `${name} client:${channel.remoteAddress}:${channel.remotePort}`
-    : name ?? 'unknown';
+    : (name ?? 'unknown');
 }
 
 function registerSessionLogging(): void {

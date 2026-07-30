@@ -14,7 +14,7 @@
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "checkJs": false,
+    "checkJs": false
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

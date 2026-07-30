@@ -8,8 +8,6 @@ const resourcePath = process.env.RESOURCEPATH || '/UA/';
 const hostname = process.env.HOSTNAME || '127.0.0.1';
 const productName = process.env.PRODUCTNAME || 'OPCUA-Server';
 
-
-
 export const serverOptions: ServerOptions = {
   port: port,
   resourcePath: resourcePath,
