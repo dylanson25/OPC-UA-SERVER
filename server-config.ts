@@ -1,9 +1,9 @@
 export const serverOptions = {
-  port: 4840,
+  port: 4841,
   resourcePath: '/UA/',
-  hostname: 'localhost',
+  hostname: '127.0.0.1',
   buildInfo: {
-    productName: 'TiaPortalPLC',
+    productName: 'OPC_UA_Server_NodeJS',
     buildNumber: '7658',
     buildDate: new Date(2026, 5, 2),
   },

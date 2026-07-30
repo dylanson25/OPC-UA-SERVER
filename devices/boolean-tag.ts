@@ -21,6 +21,7 @@ const timestamp = () => {
  * @param {number} [params.minimumSamplingInterval=1000]
  */
 export function addBooleanTag({
+  addressSpace,
   namespace,
   device,
   nodeId,
