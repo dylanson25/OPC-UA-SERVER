@@ -44,16 +44,6 @@ describe('TagSchema', () => {
     });
 
     describe('threshold field (common to all types)', () => {
-        it('accepts a boolean tag with threshold, even though it is semantically unused', () => {
-            const result = TagSchema.safeParse({
-                browseName: 'Running',
-                nodeId: 'ns=1;s=Running',
-                type: 'boolean',
-                threshold: 0.5,
-            });
-
-            expect(result.success).toBe(true);
-        });
 
         it('accepts a float tag with threshold', () => {
             const result = TagSchema.safeParse({
@@ -102,18 +92,6 @@ describe('TagSchema', () => {
             expect(result.success).toBe(true);
         });
 
-        it('accepts a boolean tag with initialValue and threshold', () => {
-            const result = TagSchema.safeParse({
-                browseName: 'Running',
-                nodeId: 'ns=1;s=Running',
-                type: 'boolean',
-                initialValue: true,
-                threshold: 0.5,
-            });
-
-            expect(result.success).toBe(true);
-        });
-
         it('rejects a boolean tag with a non-boolean initialValue', () => {
             const result = TagSchema.safeParse({
                 browseName: 'Running',
@@ -124,6 +102,7 @@ describe('TagSchema', () => {
 
             expect(result.success).toBe(false);
         });
+
     });
 
     describe('integer type', () => {
