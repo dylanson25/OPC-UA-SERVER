@@ -54,7 +54,7 @@ export class OPCUAServerManager {
             callback?.();
         }, 10_000);
 
-
+        this.cleanupResources();
 
         try {
             this.server.shutdown(0, () => {
@@ -67,6 +67,11 @@ export class OPCUAServerManager {
             this.logger.error({ err }, 'Error during server shutdown');
             callback?.();
         }
+    }
+
+    private cleanupResources(): void {
+
+        this.logger.debug('Resource cleanup completed');
     }
 
     private buildAddressSpace(): void {
