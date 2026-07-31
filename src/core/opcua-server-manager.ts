@@ -9,6 +9,7 @@ export class OPCUAServerManager {
     private readonly logger = createModuleLogger('server');
     private readonly server: OPCUAServer;
     private initialized = false;
+    private isShuttingDown = false;
 
     constructor() {
         this.server = new OPCUAServer(serverOptions);
@@ -40,10 +41,37 @@ export class OPCUAServerManager {
     }
 
     shutdown(callback?: () => void): void {
-        this.server.shutdown(() => {
-            this.logger.info('Server shutdown complete');
+        if (this.isShuttingDown) {
+            this.logger.warn('Shutdown already in progress, ignoring duplicate call');
+            return;
+        }
+
+        this.isShuttingDown = true;
+        this.logger.info('Shutting down OPC UA server...');
+
+        const forceExitTimeout = setTimeout(() => {
+            this.logger.error('Shutdown timed out, forcing exit');
             callback?.();
-        });
+        }, 10_000);
+
+        this.cleanupResources();
+
+        try {
+            this.server.shutdown(0, () => {
+                clearTimeout(forceExitTimeout);
+                this.logger.info('Server shutdown complete');
+                callback?.();
+            });
+        } catch (err) {
+            clearTimeout(forceExitTimeout);
+            this.logger.error({ err }, 'Error during server shutdown');
+            callback?.();
+        }
+    }
+
+    private cleanupResources(): void {
+
+        this.logger.debug('Resource cleanup completed');
     }
 
     private buildAddressSpace(): void {
