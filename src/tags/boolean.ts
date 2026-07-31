@@ -1,5 +1,9 @@
 import * as opcua from 'node-opcua';
+import { createModuleLogger } from '../infrastructure/logger/index.js';
 import type { BooleanTagParams } from '../types/index.ts';
+
+const logger = createModuleLogger('address-space');
+
 /**
  * Returns an "HH:MM:SS.mmm" timestamp for change-log lines.
  */
@@ -36,10 +40,16 @@ export function addBooleanTag({
       set: (variant: { value: unknown }) => {
         const newValue = Boolean(variant.value);
         if (newValue !== currentValue) {
-          console.log(
-            `\n----- ${device.browseName} | ${nodeId} | ${timestamp()} -----`,
+          logger.info(
+            {
+              device: device.browseName,
+              nodeId,
+              browseName,
+              newValue,
+              timestamp: timestamp(),
+            },
+            'Boolean tag changed',
           );
-          console.log(`${browseName} (${nodeId}):`, newValue);
         }
         currentValue = newValue;
         return opcua.StatusCodes.Good;
