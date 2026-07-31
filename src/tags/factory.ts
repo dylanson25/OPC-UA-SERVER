@@ -1,7 +1,7 @@
 import * as opcua from 'node-opcua';
 
-import { addPrimitiveTag } from './primitive.js';
-import { createModuleLogger } from '../infrastructure/logger/index.js';
+import { addPrimitiveTag } from './primitive.ts';
+import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import type { CreateTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');

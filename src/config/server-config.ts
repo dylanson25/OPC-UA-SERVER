@@ -1,4 +1,4 @@
-import type { ServerOptions } from '../types/server.js';
+import type { ServerOptions } from '../types/server.ts';
 import * as dotenv from 'dotenv';
 
 dotenv.config();

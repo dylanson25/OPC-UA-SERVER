@@ -1,5 +1,5 @@
-import { OPCUAServerManager } from './core/index.js';
-import { createModuleLogger } from './infrastructure/logger/index.js';
+import { OPCUAServerManager } from './core/index.ts';
+import { createModuleLogger } from './infrastructure/logger/index.ts';
 const logger = createModuleLogger('session');
 
 const serverManager = new OPCUAServerManager();

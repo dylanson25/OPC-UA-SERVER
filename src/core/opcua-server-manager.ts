@@ -1,9 +1,9 @@
 import { OPCUAServer } from 'node-opcua';
 
-import { serverOptions } from '../config/server-config.js';
-import { loadDevices } from '../devices/index.js';
-import { createModuleLogger } from '../infrastructure/logger/index.js';
-import type { SessionLike } from '../types/index.js';
+import { serverOptions } from '../config/server-config.ts';
+import { loadDevices } from '../devices/index.ts';
+import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import type { SessionLike } from '../types/index.ts';
 
 export class OPCUAServerManager {
     private readonly logger = createModuleLogger('server');
