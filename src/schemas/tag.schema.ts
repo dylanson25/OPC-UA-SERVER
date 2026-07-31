@@ -10,6 +10,7 @@ export const TagSchema: z.ZodType<TagConfig> = z.union([
     baseTagSchema.extend({
         type: z.literal('boolean'),
         initialValue: z.boolean().optional(),
+        threshold: z.number().optional()
     }),
     baseTagSchema.extend({
         type: z.literal('integer'),

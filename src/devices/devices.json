@@ -25,7 +25,8 @@
                 "type": "double",
                 "browseName": "Pressure",
                 "nodeId": "ns=1;s=PLC1.Pressure",
-                "initialValue": 101.25
+                "initialValue": 101.25,
+                "threshold": 120.0
             },
             {
                 "type": "string",

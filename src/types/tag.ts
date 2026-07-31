@@ -17,6 +17,7 @@ export interface PrimitiveTagParams {
   valueType: DataType;
   parser: (value: unknown) => unknown;
   label: string;
+  changeThreshold?: number;
 }
 
 export interface CreateTagParams {

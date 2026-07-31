@@ -19,6 +19,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Boolean,
         parser: (value) => Boolean(value ?? false),
         label: 'Boolean',
+        changeThreshold: config.threshold
       });
       return;
     case 'integer':

@@ -15,6 +15,7 @@ export type TagType =
 export interface BaseTagConfig {
   browseName: string;
   nodeId: string;
+  threshold?: number;
 }
 
 export interface BooleanTagConfig extends BaseTagConfig {

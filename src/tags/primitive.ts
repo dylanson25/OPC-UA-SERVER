@@ -1,14 +1,10 @@
 import * as opcua from 'node-opcua';
 
 import { createModuleLogger } from '../infrastructure/logger/index.js';
+import { hasSignificantChange } from '../utils/index.ts'
 import type { PrimitiveTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
-
-const timestamp = (): string => {
-    const now = new Date();
-    return `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}.${now.getMilliseconds()}`;
-};
 
 export function addPrimitiveTag({
     namespace,
@@ -21,6 +17,7 @@ export function addPrimitiveTag({
     valueType,
     parser,
     label,
+    changeThreshold = 0.01
 }: PrimitiveTagParams): void {
     let currentValue = initialValue;
 
@@ -39,14 +36,14 @@ export function addPrimitiveTag({
             set: (variant: { value: unknown }) => {
                 const newValue = parser(variant.value);
 
-                if (newValue !== currentValue) {
-                    logger.info(
+                if (hasSignificantChange(currentValue, newValue, changeThreshold)) {
+                    logger.debug(
                         {
-                            device: device.browseName,
-                            nodeId,
+                            device: device.browseName.toString(),
+                            nodeId: nodeId.toString(),
                             browseName,
+                            oldValue: currentValue,
                             newValue,
-                            timestamp: timestamp(),
                         },
                         `${label} tag changed`,
                     );
