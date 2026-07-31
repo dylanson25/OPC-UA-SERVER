@@ -4,13 +4,13 @@ import type { TagConfig } from '../types/index.ts';
 const baseTagSchema = z.object({
     browseName: z.string().trim().min(1),
     nodeId: z.string().trim().min(1),
+    threshold: z.number().optional()
 });
 
 export const TagSchema: z.ZodType<TagConfig> = z.union([
     baseTagSchema.extend({
         type: z.literal('boolean'),
         initialValue: z.boolean().optional(),
-        threshold: z.number().optional()
     }),
     baseTagSchema.extend({
         type: z.literal('integer'),

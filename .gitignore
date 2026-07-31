@@ -21,3 +21,8 @@ Thumbs.db
 # Build output
 /dist
 /build
+
+# Testing
+coverage/
+.vitest/
+*.test.ts.snap

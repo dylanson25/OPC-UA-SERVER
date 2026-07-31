@@ -1,5 +1,5 @@
 import type { NamespaceLike, DeviceConfig } from '../types/index.ts';
-import { createTag } from '../tags/factory.js';
+import { createTag } from '../tags/factory.ts';
 
 export function createDevice(namespace: NamespaceLike, config: DeviceConfig) {
   const device = namespace.addObject({

@@ -1,1 +1,1 @@
-export { OPCUAServerManager } from './opcua-server-manager.js';
+export { OPCUAServerManager } from './opcua-server-manager.ts';

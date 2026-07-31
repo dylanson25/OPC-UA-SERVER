@@ -7,9 +7,9 @@ import type {
   NamespaceLike,
   DeviceConfig,
 } from '../types/index.ts';
-import { createModuleLogger } from '../infrastructure/logger/index.js';
+import { createModuleLogger } from '../infrastructure/logger/index.ts';
 
-import { createDevice } from './device-factory.js';
+import { createDevice } from './device-factory.ts';
 
 const logger = createModuleLogger('address-space');
 

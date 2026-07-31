@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { TagSchema } from './tag.schema.js';
-import { validateUnique } from './utils.js';
+import { TagSchema } from './tag.schema.ts';
+import { validateUnique } from './utils.ts';
 
 export const DeviceSchema = z
     .object({

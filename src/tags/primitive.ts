@@ -1,6 +1,6 @@
 import * as opcua from 'node-opcua';
 
-import { createModuleLogger } from '../infrastructure/logger/index.js';
+import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { hasSignificantChange } from '../utils/index.ts'
 import type { PrimitiveTagParams } from '../types/index.ts';
 

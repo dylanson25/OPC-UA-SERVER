@@ -1,7 +1,7 @@
 import * as opcua from 'node-opcua';
 
-import { addPrimitiveTag } from './primitive.js';
-import { createModuleLogger } from '../infrastructure/logger/index.js';
+import { addPrimitiveTag } from './primitive.ts';
+import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import type { CreateTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
@@ -19,7 +19,6 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Boolean,
         parser: (value) => Boolean(value ?? false),
         label: 'Boolean',
-        changeThreshold: config.threshold
       });
       return;
     case 'integer':
@@ -33,6 +32,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Int32,
         parser: (value) => Number.parseInt(String(value ?? 0), 10),
         label: 'Integer',
+        changeThreshold: config.threshold
       });
       return;
     case 'float':
@@ -46,6 +46,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Float,
         parser: (value) => Number(value ?? 0),
         label: 'Float',
+        changeThreshold: config.threshold
       });
       return;
     case 'double':
@@ -59,6 +60,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Double,
         parser: (value) => Number(value ?? 0),
         label: 'Double',
+        changeThreshold: config.threshold
       });
       return;
     case 'string':
