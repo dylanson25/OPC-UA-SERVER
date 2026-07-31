@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { z } from 'zod';
 
+import { DeviceSchema } from '../schemas/index.ts';
 import type {
   AddressSpaceLike,
   NamespaceLike,
@@ -11,7 +13,6 @@ import { createDevice } from './device-factory.js';
 
 function findDevicesDirectory(): string | null {
   const candidates = [
-    path.join(process.cwd(), 'devices'),
     path.join(process.cwd(), 'src', 'devices'),
     path.join(process.cwd(), 'dist', 'devices'),
   ];
@@ -35,9 +36,7 @@ export function loadDevices(
   const devicesPath = findDevicesDirectory();
 
   if (!devicesPath) {
-    console.warn(
-      'No devices directory found. Expected one of: ./devices, ./src/devices, ./dist/devices',
-    );
+    console.warn('No devices directory found. Expected one of: ./devices, ./src/devices, ./dist/devices',);
     return;
   }
 
@@ -50,14 +49,17 @@ export function loadDevices(
   for (const file of jsonFiles) {
     const fullPath = path.join(devicesPath, file);
     const raw = fs.readFileSync(fullPath, 'utf8');
+    const json = JSON.parse(raw);
+    let zodParseResult = DeviceSchema.safeParse(json)
     let config: DeviceConfig;
-    try {
-      config = JSON.parse(raw) as DeviceConfig;
-    } catch (err) {
-      console.warn(`Skipping invalid JSON device file: ${file}`);
-      console.warn(err);
+
+    if (!zodParseResult.success) {
+      console.error(`Invalid device configuration in file: ${file}`);
+      console.error(zodParseResult.error.format());
       continue;
     }
+
+    config = zodParseResult.data;
 
     if (seenDevices.has(config.name)) {
       console.warn(`Skipping duplicate device definition: ${config.name}`);
@@ -66,7 +68,7 @@ export function loadDevices(
 
     // dedupe tags inside device by nodeId
     const seenTagIds = new Set<string>();
-    config.tags = (config.tags || []).filter((t) => {
+    config.tags = (config.tags).filter((t) => {
       if (!t.nodeId) return false;
       if (seenTagIds.has(t.nodeId)) return false;
       seenTagIds.add(t.nodeId);
