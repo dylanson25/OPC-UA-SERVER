@@ -1,5 +1,4 @@
 import type {
-  IAddressSpace,
   INamespace,
   UAObject,
 } from 'node-opcua-address-space-base';
