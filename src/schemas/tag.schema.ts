@@ -1,13 +1,37 @@
 import { z } from 'zod';
 import type { TagConfig } from '../types/index.ts';
 
-const TagsEnum = z.enum(['boolean']);
-
-export const TagSchema: z.ZodType<TagConfig> = z.object({
-    type: TagsEnum,
+const baseTagSchema = z.object({
     browseName: z.string().trim().min(1),
     nodeId: z.string().trim().min(1),
-    initialValue: z.boolean().optional(),
 });
+
+export const TagSchema: z.ZodType<TagConfig> = z.union([
+    baseTagSchema.extend({
+        type: z.literal('boolean'),
+        initialValue: z.boolean().optional(),
+        threshold: z.number().optional()
+    }),
+    baseTagSchema.extend({
+        type: z.literal('integer'),
+        initialValue: z.number().int().optional(),
+    }),
+    baseTagSchema.extend({
+        type: z.literal('float'),
+        initialValue: z.number().optional(),
+    }),
+    baseTagSchema.extend({
+        type: z.literal('double'),
+        initialValue: z.number().optional(),
+    }),
+    baseTagSchema.extend({
+        type: z.literal('string'),
+        initialValue: z.string().optional(),
+    }),
+    baseTagSchema.extend({
+        type: z.literal('dateTime'),
+        initialValue: z.union([z.string(), z.number(), z.date()]).optional(),
+    }),
+]);
 
 
