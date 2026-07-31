@@ -8,6 +8,36 @@
                 "browseName": "Input_ProductSensorDB",
                 "nodeId": "ns=1;s=PLC1.Input_ProductSensorDB",
                 "initialValue": false
+            },
+            {
+                "type": "integer",
+                "browseName": "CycleCount",
+                "nodeId": "ns=1;s=PLC1.CycleCount",
+                "initialValue": 42
+            },
+            {
+                "type": "float",
+                "browseName": "Temperature",
+                "nodeId": "ns=1;s=PLC1.Temperature",
+                "initialValue": 25.5
+            },
+            {
+                "type": "double",
+                "browseName": "Pressure",
+                "nodeId": "ns=1;s=PLC1.Pressure",
+                "initialValue": 101.25
+            },
+            {
+                "type": "string",
+                "browseName": "StatusText",
+                "nodeId": "ns=1;s=PLC1.StatusText",
+                "initialValue": "Running"
+            },
+            {
+                "type": "dateTime",
+                "browseName": "LastScan",
+                "nodeId": "ns=1;s=PLC1.LastScan",
+                "initialValue": "2026-07-31T10:00:00.000Z"
             }
         ]
     },
