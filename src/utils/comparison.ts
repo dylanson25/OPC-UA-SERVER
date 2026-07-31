@@ -8,7 +8,7 @@ export const hasSignificantChange = (
     }
 
     if (Number.isNaN(oldVal) || Number.isNaN(newVal)) {
-        return oldVal !== newVal; // NaN !== NaN siempre es true, lo dejamos pasar
+        return oldVal !== newVal;
     }
 
     return Math.abs(newVal - oldVal) > threshold;

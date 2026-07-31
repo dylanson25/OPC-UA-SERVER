@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as opcua from 'node-opcua';
 
-vi.mock('../src/tags/primitive.ts', () => ({
+vi.mock('../../src/tags/primitive.ts', () => ({
     addPrimitiveTag: vi.fn(),
 }));
 
-vi.mock('../src/infrastructure/logger/index.ts', () => ({
+vi.mock('../../src/infrastructure/logger/index.ts', () => ({
     createModuleLogger: () => ({
         warn: vi.fn(),
         info: vi.fn(),
@@ -14,8 +14,8 @@ vi.mock('../src/infrastructure/logger/index.ts', () => ({
     }),
 }));
 
-import { createTag } from '../src/tags/factory.ts'; // ajustar ruta real del archivo
-import { addPrimitiveTag } from '../src/tags/primitive.ts';
+import { createTag } from '../../src/tags/factory.ts';
+import { addPrimitiveTag } from '../../src/tags/primitive.ts';
 
 const mockedAddPrimitiveTag = vi.mocked(addPrimitiveTag);
 
@@ -134,7 +134,7 @@ describe('createTag', () => {
 
             const { parser } = mockedAddPrimitiveTag.mock.calls[0][0];
             expect(parser('42')).toBe(42);
-            expect(parser(42.9)).toBe(42); // parseInt trunca, no redondea
+            expect(parser(42.9)).toBe(42);
             expect(parser(undefined)).toBe(0);
         });
         it('forwards threshold as changeThreshold when configured', () => {
