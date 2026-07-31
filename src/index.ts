@@ -1,8 +1,10 @@
 import { OPCUAServer } from 'node-opcua';
 import { serverOptions } from './config/server-config.js';
 import { loadDevices } from './devices/index.js';
+import { createModuleLogger } from './infrastructure/logger/index.js';
 import type { SessionLike } from './types/index.js';
 
+const logger = createModuleLogger('server');
 const server = new OPCUAServer(serverOptions);
 
 function buildAddressSpace(): void {
@@ -25,11 +27,11 @@ function describeSessionClient(session: SessionLike): string {
 
 function registerSessionLogging(): void {
   server.on('create_session', (session: SessionLike) => {
-    console.log('create_session:', describeSessionClient(session));
+    logger.info({ client: describeSessionClient(session) }, 'create_session');
   });
 
   server.on('session_closed', (session: SessionLike) => {
-    console.log('session_closed:', describeSessionClient(session));
+    logger.info({ client: describeSessionClient(session) }, 'session_closed');
   });
 }
 
@@ -38,9 +40,8 @@ function startServer(): void {
     const endpointUrl =
       server.endpoints[0].endpointDescriptions()[0].endpointUrl;
 
-    console.log('Server listening (Ctrl+C to stop)');
-    console.log('port:', server.endpoints[0].port);
-    console.log('endpoint:', endpointUrl);
+    logger.info('Server listening (Ctrl+C to stop)');
+    logger.info({ port: server.endpoints[0].port, endpoint: endpointUrl }, 'server_details');
   });
 }
 

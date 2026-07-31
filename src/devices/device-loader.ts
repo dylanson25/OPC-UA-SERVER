@@ -7,8 +7,11 @@ import type {
   NamespaceLike,
   DeviceConfig,
 } from '../types/index.ts';
+import { createModuleLogger } from '../infrastructure/logger/index.js';
 
 import { createDevice } from './device-factory.js';
+
+const logger = createModuleLogger('address-space');
 
 const candidates = [
   path.join(process.cwd(), 'src', 'devices'),
@@ -20,7 +23,7 @@ function findDevicesDirectory(): string | null {
     try {
       if (fs.statSync(c).isDirectory()) return c;
     } catch {
-      console.warn(`Devices directory not found: ${c}`);
+      logger.warn({ path: c }, 'Devices directory not found');
     }
   }
 
@@ -36,7 +39,10 @@ export function loadDevices(
   const devicesPath = findDevicesDirectory();
 
   if (!devicesPath) {
-    console.warn(`No devices directory found. Expected one of: ${candidates.join(', ')}`);
+    logger.warn(
+      { candidates },
+      'No devices directory found',
+    );
     return;
   }
 
@@ -46,8 +52,10 @@ export function loadDevices(
   try {
     raw = fs.readFileSync(devicesFile, 'utf8');
   } catch (error) {
-    console.error(`Unable to read device file: ${path.basename(devicesFile)}`);
-    console.error(error);
+    logger.error(
+      { file: path.basename(devicesFile), err: error },
+      'Unable to read device file',
+    );
     return;
   }
 
@@ -55,23 +63,27 @@ export function loadDevices(
   try {
     json = JSON.parse(raw);
   } catch (error) {
-    console.error(`Invalid JSON in device file: ${path.basename(devicesFile)}`);
-    console.error(error);
+    logger.error(
+      { file: path.basename(devicesFile), err: error },
+      'Invalid JSON in device file',
+    );
     return;
   }
 
   const parsed = DevicesSchema.safeParse(json);
 
   if (!parsed.success) {
-    console.error(`Invalid device configuration in file: ${path.basename(devicesFile)}`);
-    console.error(parsed.error.issues);
+    logger.error(
+      { file: path.basename(devicesFile), issues: parsed.error.issues },
+      'Invalid device configuration in file',
+    );
     return;
   }
 
   const devices: Record<string, DeviceConfig> = parsed.data;
 
   for (const [deviceKey, config] of Object.entries(devices)) {
-    console.log(`Loading device: ${deviceKey} (${config.name})`);
+    logger.info({ deviceKey, deviceName: config.name }, 'Loading device');
     createDevice(namespace, config);
   }
 }

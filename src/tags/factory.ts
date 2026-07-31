@@ -1,5 +1,8 @@
 import { addBooleanTag } from './boolean.ts';
+import { createModuleLogger } from '../infrastructure/logger/index.js';
 import type { CreateTagParams } from '../types/index.ts';
+
+const logger = createModuleLogger('address-space');
 
 export function createTag({ namespace, device, config }: CreateTagParams) {
   switch (config.type) {
@@ -10,6 +13,6 @@ export function createTag({ namespace, device, config }: CreateTagParams) {
         ...config,
       });
     default:
-      console.warn(`Unsupported tag type: ${config.type}`);
+      logger.warn({ tagType: config.type }, 'Unsupported tag type');
   }
 }
