@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { DevicesSchema } from '../schemas/index.ts';
 import type {
   AddressSpaceLike,
   NamespaceLike,
@@ -9,19 +10,17 @@ import type {
 
 import { createDevice } from './device-factory.js';
 
-function findDevicesDirectory(): string | null {
-  const candidates = [
-    path.join(process.cwd(), 'devices'),
-    path.join(process.cwd(), 'src', 'devices'),
-    path.join(process.cwd(), 'dist', 'devices'),
-  ];
+const candidates = [
+  path.join(process.cwd(), 'src', 'devices'),
+  path.join(process.cwd(), 'dist', 'devices'),
+];
 
+function findDevicesDirectory(): string | null {
   for (const c of candidates) {
     try {
       if (fs.statSync(c).isDirectory()) return c;
-    } catch (e) {
+    } catch {
       console.warn(`Devices directory not found: ${c}`);
-      console.warn(e);
     }
   }
 
@@ -32,50 +31,47 @@ export function loadDevices(
   addressSpace: AddressSpaceLike,
   namespace: NamespaceLike,
 ): void {
+  void addressSpace;
+
   const devicesPath = findDevicesDirectory();
 
   if (!devicesPath) {
-    console.warn(
-      'No devices directory found. Expected one of: ./devices, ./src/devices, ./dist/devices',
-    );
+    console.warn(`No devices directory found. Expected one of: ${candidates.join(', ')}`);
     return;
   }
 
-  const files = fs.readdirSync(devicesPath);
+  const devicesFile = path.join(devicesPath, 'devices.json');
 
-  const jsonFiles = files.filter((file) => file.endsWith('.json'));
+  let raw: string;
+  try {
+    raw = fs.readFileSync(devicesFile, 'utf8');
+  } catch (error) {
+    console.error(`Unable to read device file: ${path.basename(devicesFile)}`);
+    console.error(error);
+    return;
+  }
 
-  const seenDevices = new Set<string>();
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch (error) {
+    console.error(`Invalid JSON in device file: ${path.basename(devicesFile)}`);
+    console.error(error);
+    return;
+  }
 
-  for (const file of jsonFiles) {
-    const fullPath = path.join(devicesPath, file);
-    const raw = fs.readFileSync(fullPath, 'utf8');
-    let config: DeviceConfig;
-    try {
-      config = JSON.parse(raw) as DeviceConfig;
-    } catch (err) {
-      console.warn(`Skipping invalid JSON device file: ${file}`);
-      console.warn(err);
-      continue;
-    }
+  const parsed = DevicesSchema.safeParse(json);
 
-    if (seenDevices.has(config.name)) {
-      console.warn(`Skipping duplicate device definition: ${config.name}`);
-      continue;
-    }
+  if (!parsed.success) {
+    console.error(`Invalid device configuration in file: ${path.basename(devicesFile)}`);
+    console.error(parsed.error.issues);
+    return;
+  }
 
-    // dedupe tags inside device by nodeId
-    const seenTagIds = new Set<string>();
-    config.tags = (config.tags || []).filter((t) => {
-      if (!t.nodeId) return false;
-      if (seenTagIds.has(t.nodeId)) return false;
-      seenTagIds.add(t.nodeId);
-      return true;
-    });
+  const devices: Record<string, DeviceConfig> = parsed.data;
 
-    console.log(`Loading device: ${config.name}`);
-
+  for (const [deviceKey, config] of Object.entries(devices)) {
+    console.log(`Loading device: ${deviceKey} (${config.name})`);
     createDevice(namespace, config);
-    seenDevices.add(config.name);
   }
 }
