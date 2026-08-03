@@ -171,33 +171,36 @@ describe('DeviceManager', () => {
     });
 
     describe('reload', () => {
-        it('removes all currently registered devices before reloading', () => {
-            mockedCreateDevice.mockReturnValue({ browseName: 'old' } as any);
+        it('does NOT remove existing devices when the new configuration is invalid', () => {
+            mockedCreateDevice.mockReturnValue({ browseName: 'Motor1' } as any);
 
             const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
-            manager.register('device1', makeConfig('Motor1'));
-            manager.register('device2', makeConfig('Motor2'));
+            const config = makeConfig('Motor1');
+            manager.register('device1', config);
 
             mockedReadDevicesConfig.mockReturnValue(null);
 
-            manager.reload();
+            const result = manager.reload();
 
-            expect(fakeAddressSpace.deleteNode).toHaveBeenCalledTimes(2);
-            expect(manager.list()).toEqual([]);
+            expect(result).toBe(false);
+            expect(fakeAddressSpace.deleteNode).not.toHaveBeenCalled();
+            expect(manager.list()).toEqual([{ key: 'device1', config }]);
         });
 
-        it('loads fresh devices from readDevicesConfig after clearing', () => {
+        it('removes old devices and registers new ones when the new configuration is valid', () => {
             mockedCreateDevice.mockReturnValueOnce({ browseName: 'old' } as any);
 
             const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
             manager.register('device1', makeConfig('OldMotor'));
 
             const newConfig = makeConfig('NewMotor');
-            mockedReadDevicesConfig.mockReturnValue({ device1: newConfig });
             mockedCreateDevice.mockReturnValueOnce({ browseName: 'new' } as any);
+            mockedReadDevicesConfig.mockReturnValue({ device1: newConfig });
 
-            manager.reload();
+            const result = manager.reload();
 
+            expect(result).toBe(true);
+            expect(fakeAddressSpace.deleteNode).toHaveBeenCalledTimes(1);
             expect(manager.list()).toEqual([{ key: 'device1', config: newConfig }]);
         });
 
@@ -205,10 +208,25 @@ describe('DeviceManager', () => {
             mockedReadDevicesConfig.mockReturnValue({ device1: makeConfig('Motor1') });
 
             const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
-            manager.reload();
+            const result = manager.reload();
 
+            expect(result).toBe(true);
             expect(fakeAddressSpace.deleteNode).not.toHaveBeenCalled();
             expect(mockedCreateDevice).toHaveBeenCalledTimes(1);
+        });
+
+        it('results in an empty device list if the new configuration is an empty object', () => {
+            mockedCreateDevice.mockReturnValueOnce({ browseName: 'old' } as any);
+
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+            manager.register('device1', makeConfig('OldMotor'));
+
+            mockedReadDevicesConfig.mockReturnValue({});
+
+            const result = manager.reload();
+
+            expect(result).toBe(true);
+            expect(manager.list()).toEqual([]);
         });
     });
 });
