@@ -1,6 +1,6 @@
 # OPC UA Lab Server
 
-A lightweight OPC UA server (built with [node-opcua](https://www.npmjs.com/package/node-opcua)) that simulates two PLC devices — the Former (AF) and the Trim Press (TP) — each exposing Boolean tags for testing/integration with an OPC UA client.
+A configurable OPC UA server (built with [node-opcua](https://www.npmjs.com/package/node-opcua) and TypeScript) that simulates PLC devices defined in a JSON configuration file. Devices, tags, and their data types are validated with [zod](https://www.npmjs.com/package/zod) and exposed as OPC UA nodes for testing/integration with any OPC UA client.
 
 ## Requirements
 
@@ -9,22 +9,48 @@ A lightweight OPC UA server (built with [node-opcua](https://www.npmjs.com/packa
 
 ## Setup
 
-1. Unzip/copy the project folder.
-2. Open a terminal in the project folder and install dependencies:
+1. Clone/copy the project folder.
+2. Install dependencies:
 
    ```bash
    npm install
    ```
 
+3. Copy `.env.example` to `.env` and adjust as needed:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+## Configuration (environment variables)
+
+Server connection settings are read from environment variables (via `.env`, loaded with `dotenv`) in [`src/config/server-config.ts`](src/config/server-config.ts):
+
+| Variable       | Default         | Description                                                                             |
+| -------------- | ---------------- | ---------------------------------------------------------------------------------------- |
+| `PORT`         | `4840`           | TCP port the OPC UA endpoint listens on.                                                 |
+| `HOSTNAME`     | `127.0.0.1`      | Interface/hostname the server binds to. Use `0.0.0.0` to listen on all interfaces.        |
+| `RESOURCEPATH` | `/UA/`           | Path portion of the endpoint URL.                                                        |
+| `PRODUCTNAME`  | `OPCUA-Server`   | Reported as the server's product name in `buildInfo`.                                    |
+| `NODE_ENV`     | `development`    | `development` enables pretty-printed logs; any other value uses plain JSON logs.          |
+| `LOG_LEVEL`    | `debug` (dev) / `info` (prod) | Minimum [pino](https://getpino.io/) log level.                             |
+
+The full endpoint URL a client should connect to is:
+
+```
+opc.tcp://<HOSTNAME>:<PORT><RESOURCEPATH>
+```
+
+e.g. `opc.tcp://127.0.0.1:4840/UA/`
+
 ## Running the server
 
 ```bash
-npm install
 npm run build
 npm start
 ```
 
-For development, use:
+For development (auto-restart on change, no build step):
 
 ```bash
 npm run dev
@@ -34,52 +60,87 @@ If it starts correctly you'll see something like:
 
 ```
 Server listening (Ctrl+C to stop)
-port: 4080
-endpoint: opc.tcp://<hostname>:4080/UA/
+port: 4840
+endpoint: opc.tcp://127.0.0.1:4840/UA/
 ```
 
-Stop the server with `Ctrl+C`.
+Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shutdown).
 
-## Configuration
+## Device configuration
 
-All server settings live in `src/config/server-config.ts`.
+Devices are defined in [`src/devices/devices.json`](src/devices/devices.json) as a map of `deviceKey -> device`:
 
-| Parameter             | Current value      | What to change it to                                                                                                                                                                        |
-| --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hostname`            | `192.168.0.150`    | The IP address (or hostname) of **your** machine's network interface. Run `ipconfig` (Windows) or `ifconfig`/`ip addr` (Mac/Linux) to find it. Use `"0.0.0.0"` to listen on all interfaces. |
-| `port`                | `4080`             | Change only if `4080` is already in use on your machine, or if your network/firewall requires a different port.                                                                             |
-| `resourcePath`        | `/UA/`             | Optional — only matters if a client expects a specific endpoint path.                                                                                                                       |
-| `buildInfo.buildDate` | fixed date in code | Cosmetic only, safe to leave as is.                                                                                                                                                         |
-
-After changing `hostname` or `port`, the full endpoint URL a client should connect to is:
-
+```json
+{
+  "PLC1": {
+    "name": "PLC 1",
+    "nodeId": "ns=1;s=PLC1",
+    "tags": [
+      {
+        "type": "float",
+        "browseName": "Temperature",
+        "nodeId": "ns=1;s=PLC1.Temperature",
+        "initialValue": 25.5,
+        "threshold": 0.5
+      }
+    ]
+  }
+}
 ```
-opc.tcp://<hostname>:<port><resourcePath>
-```
 
-e.g. `opc.tcp://192.168.1.20:4080/UA/`
+- Each device becomes an OPC UA object under `ObjectsFolder`; each tag becomes a variable node under that object.
+- Supported tag `type`s: `boolean`, `integer`, `float`, `double`, `string`, `dateTime`.
+- `threshold` (numeric types only) sets the minimum change required before a value-change is logged (default `0.01`).
+- The file is validated against a zod schema on every load/reload (`src/schemas/`) — device keys, node IDs, tag node IDs, and browse names must be unique. Invalid JSON, or a file that fails validation, is rejected and logged, leaving previously-loaded devices untouched.
 
-## Simulated tags
+### Hot reload
 
-| Device                  | Node ID       | Browse Name                      |
-| ----------------------- | ------------- | -------------------------------- |
-| PLC-IRWIN-FORMER-DEVICE | `s=PRS_20_AF` | Top_Platen_Home_Switch_PRS-20    |
-| PLC-IRWIN-FORMER-DEVICE | `s=PRS_21_AF` | Bottom_Platen_Home_Switch_PRS-21 |
-| PLC-TP-LAB-DEVICE       | `s=PE_20_TP`  | Servo_Pick_Register_PE-20        |
-| PLC-TP-LAB-DEVICE       | `s=PE_22_TP`  | TP_Platen_Home_Switch_PRS-22     |
-
-All tags are Boolean, default to `true`, and log a line to the console whenever their value changes. To add or rename a tag, edit the `TAGS` array at the top of the corresponding file in `devices/`.
+While the server is running, `ConfigWatcher` watches `devices.json` for changes and reloads devices automatically (debounced), without restarting the server. If the new file is invalid, the reload is skipped and the previous devices stay active.
 
 ## Project structure
 
 ```
-.
-├── index.js              # Entry point: starts the server, wires up devices
-├── server-config.js       # Server connection settings (hostname, port, etc.)
-├── package.json
-└── devices/
-    ├── index.js           # Exports all device setup functions
-    ├── boolean-tag.js      # Shared helper for adding logged Boolean tags
-    ├── plc-af-lab.dev.js   # Former (AF) PLC tag definitions
-    └── plc-tp-lab.dev.js   # Trim Press (TP) PLC tag definitions
+src/
+├── index.ts                     # Entry point: creates the server, wires up graceful shutdown
+├── config/
+│   └── server-config.ts         # Reads env vars into OPCUAServer options
+├── core/
+│   └── opcua-server-manager.ts  # Lifecycle: initialize -> build address space -> start -> shutdown
+├── devices/
+│   ├── devices.json              # Device/tag definitions (see above)
+│   ├── config-reader.ts          # Reads + validates devices.json
+│   ├── config-watcher.ts         # Watches devices.json and triggers hot reload
+│   ├── device-factory.ts         # Creates an OPC UA object node for a device
+│   └── device-manager.ts         # Registers/removes/reloads devices in the address space
+├── tags/
+│   ├── factory.ts                # Dispatches tag creation by type
+│   └── primitive.ts               # Creates a variable node with change-logging
+├── schemas/                      # zod schemas for devices/tags
+├── types/                        # Shared TypeScript types
+├── utils/
+│   └── comparison.ts             # Numeric change-detection helper
+└── infrastructure/
+    └── logger/                   # pino logger setup
+```
+
+## Testing
+
+Tests run with [Vitest](https://vitest.dev/).
+
+```bash
+npm test              # run all tests once
+npm run test:watch    # watch mode
+npm run test:coverage # run with coverage report
+```
+
+- `tests/**/*.test.ts` — unit tests for schemas, tag factories, `DeviceManager`, `ConfigWatcher`, and config reading, with `node-opcua` and the filesystem mocked.
+- `tests/core/opcua-server-manager.integration.test.ts` — integration tests that boot a real OPC UA server on an OS-assigned port (no mocks), load the real `devices.json`, connect with a real OPC UA client, and verify address-space creation, device loading, tag reads, and graceful shutdown end-to-end.
+
+## Linting & formatting
+
+```bash
+npm run lint         # ESLint
+npm run lint:fix      # ESLint with autofix
+npm run format:check  # Prettier check
+npm run format        # Prettier write
 ```
