@@ -4,6 +4,7 @@ import path from 'node:path';
 import { DevicesSchema } from '../schemas/index.ts';
 import type { DeviceConfig } from '../types/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { ConfigurationError, ErrorCode, ValidationError, logAppError } from '../errors/index.ts';
 
 const logger = createModuleLogger('address-space');
 
@@ -21,7 +22,14 @@ export function findDevicesDirectory(): string | null {
         }
     }
 
-    logger.warn({ candidates }, 'No devices directory found');
+    logAppError(
+        logger,
+        new ConfigurationError(
+            ErrorCode.CONFIG_FILE_NOT_FOUND,
+            'No devices directory found',
+            { candidates },
+        ),
+    );
     return null;
 }
 
@@ -41,7 +49,14 @@ export function readDevicesConfig(): Record<string, DeviceConfig> | null {
     try {
         raw = fs.readFileSync(devicesFile, 'utf8');
     } catch (error) {
-        logger.error({ file: path.basename(devicesFile), err: error }, 'Unable to read device file');
+        logAppError(
+            logger,
+            new ConfigurationError(
+                ErrorCode.CONFIG_FILE_NOT_FOUND,
+                'Unable to read device file',
+                { file: path.basename(devicesFile), err: error },
+            ),
+        );
         return null;
     }
 
@@ -49,15 +64,22 @@ export function readDevicesConfig(): Record<string, DeviceConfig> | null {
     try {
         json = JSON.parse(raw);
     } catch (error) {
-        logger.error({ file: path.basename(devicesFile), err: error }, 'Invalid JSON in device file');
+        logAppError(
+            logger,
+            new ValidationError(
+                ErrorCode.DEVICE_CONFIG_INVALID,
+                `Path:\n${path.basename(devicesFile)}\n\nReason:\nInvalid JSON in device file`,
+                { file: path.basename(devicesFile), err: error },
+            ),
+        );
         return null;
     }
 
     const parsed = DevicesSchema.safeParse(json);
     if (!parsed.success) {
-        logger.error(
-            { file: path.basename(devicesFile), issues: parsed.error.issues },
-            'Invalid device configuration in file',
+        logAppError(
+            logger,
+            ValidationError.fromZodError(parsed.error, { file: path.basename(devicesFile) }),
         );
         return null;
     }

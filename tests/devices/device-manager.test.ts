@@ -72,6 +72,35 @@ describe('DeviceManager', () => {
             expect(mockedCreateDevice).toHaveBeenCalledTimes(1);
             expect(manager.list()).toEqual([{ key: 'device1', config: config1 }]);
         });
+
+        it('does not crash and skips the device when createDevice throws', () => {
+            mockedCreateDevice.mockImplementationOnce(() => {
+                throw new Error('node-opcua failed to create object');
+            });
+
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+            const config = makeConfig('Motor1');
+
+            expect(() => manager.register('device1', config)).not.toThrow();
+            expect(manager.list()).toEqual([]);
+        });
+
+        it('still registers the remaining devices when one device fails to register', () => {
+            mockedCreateDevice
+                .mockImplementationOnce(() => {
+                    throw new Error('node-opcua failed to create object');
+                })
+                .mockReturnValueOnce({ browseName: 'Motor2' } as any);
+
+            const config1 = makeConfig('Motor1');
+            const config2 = makeConfig('Motor2');
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+
+            manager.register('device1', config1);
+            manager.register('device2', config2);
+
+            expect(manager.list()).toEqual([{ key: 'device2', config: config2 }]);
+        });
     });
 
     describe('load', () => {

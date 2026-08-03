@@ -3,6 +3,7 @@ import { OPCUAServer } from 'node-opcua';
 import { serverOptions } from '../config/server-config.ts';
 import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { ErrorCode, ServerError, logAppError } from '../errors/index.ts';
 import type { SessionLike } from '../types/index.ts';
 
 export class OPCUAServerManager {
@@ -66,7 +67,12 @@ export class OPCUAServerManager {
             });
         } catch (err) {
             clearTimeout(forceExitTimeout);
-            this.logger.error({ err }, 'Error during server shutdown');
+            logAppError(
+                this.logger,
+                new ServerError(ErrorCode.SERVER_SHUTDOWN_FAILED, 'Error during server shutdown', {
+                    err,
+                }),
+            );
             callback?.();
         }
     }

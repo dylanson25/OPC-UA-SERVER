@@ -5,17 +5,20 @@ vi.mock('../../src/tags/primitive.ts', () => ({
     addPrimitiveTag: vi.fn(),
 }));
 
+const mockedLogger = vi.hoisted(() => ({
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+}));
+
 vi.mock('../../src/infrastructure/logger/index.ts', () => ({
-    createModuleLogger: () => ({
-        warn: vi.fn(),
-        info: vi.fn(),
-        debug: vi.fn(),
-        error: vi.fn(),
-    }),
+    createModuleLogger: () => mockedLogger,
 }));
 
 import { createTag } from '../../src/tags/factory.ts';
 import { addPrimitiveTag } from '../../src/tags/primitive.ts';
+import { ErrorCode } from '../../src/errors/index.ts';
 
 const mockedAddPrimitiveTag = vi.mocked(addPrimitiveTag);
 
@@ -24,6 +27,7 @@ const fakeDevice = {} as any;
 
 beforeEach(() => {
     mockedAddPrimitiveTag.mockClear();
+    mockedLogger.error.mockClear();
 });
 
 describe('createTag', () => {
@@ -364,14 +368,20 @@ describe('createTag', () => {
     });
 
     describe('unsupported type', () => {
-        it('does not call addPrimitiveTag and logs a warning', () => {
+        it('does not call addPrimitiveTag and logs a structured TagError', () => {
             createTag({
                 namespace: fakeNamespace,
                 device: fakeDevice,
-                config: { type: 'unknownType' } as any,
+                config: { type: 'unknownType', browseName: 'Weird' } as any,
             });
 
             expect(mockedAddPrimitiveTag).not.toHaveBeenCalled();
+            expect(mockedLogger.error).toHaveBeenCalledTimes(1);
+
+            const [payload] = mockedLogger.error.mock.calls[0];
+            expect(payload.code).toBe(ErrorCode.TAG_TYPE_NOT_SUPPORTED);
+            expect(payload.category).toBe('TagError');
+            expect(payload.context).toEqual({ tagType: 'unknownType', browseName: 'Weird' });
         });
     });
 });

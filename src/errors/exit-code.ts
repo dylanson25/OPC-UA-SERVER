@@ -1,0 +1,10 @@
+export enum ExitCode {
+    SUCCESS = 0,
+    UNKNOWN_ERROR = 1,
+    CONFIGURATION_ERROR = 2,
+    VALIDATION_ERROR = 3,
+    DEVICE_ERROR = 4,
+    TAG_ERROR = 5,
+    SERVER_ERROR = 6,
+    RUNTIME_ERROR = 7,
+}
