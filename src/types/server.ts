@@ -28,4 +28,8 @@ export interface SessionLike {
   };
   sessionName?: string;
   sessionId?: string | number;
+  clientDescription?: {
+    applicationName?: { text?: string };
+  };
+  creationDate?: Date;
 }

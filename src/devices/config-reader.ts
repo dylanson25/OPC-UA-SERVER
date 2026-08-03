@@ -5,6 +5,7 @@ import { DevicesSchema } from '../schemas/index.ts';
 import type { DeviceConfig } from '../types/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { ConfigurationError, ErrorCode, ValidationError, logAppError } from '../errors/index.ts';
+import type { MetricsService } from '../metrics/index.ts';
 
 const logger = createModuleLogger('address-space');
 
@@ -13,7 +14,7 @@ const candidates = [
     path.join(process.cwd(), 'dist', 'devices'),
 ];
 
-export function findDevicesDirectory(): string | null {
+export function findDevicesDirectory(metrics?: MetricsService): string | null {
     for (const c of candidates) {
         try {
             if (fs.statSync(c).isDirectory()) return c;
@@ -30,6 +31,7 @@ export function findDevicesDirectory(): string | null {
             { candidates },
         ),
     );
+    metrics?.recordError('ConfigurationError');
     return null;
 }
 
@@ -39,8 +41,8 @@ export function getDevicesFilePath(): string | null {
     return path.join(dir, 'devices.json');
 }
 
-export function readDevicesConfig(): Record<string, DeviceConfig> | null {
-    const devicesPath = findDevicesDirectory();
+export function readDevicesConfig(metrics?: MetricsService): Record<string, DeviceConfig> | null {
+    const devicesPath = findDevicesDirectory(metrics);
     if (!devicesPath) return null;
 
     const devicesFile = path.join(devicesPath, 'devices.json');
@@ -57,6 +59,7 @@ export function readDevicesConfig(): Record<string, DeviceConfig> | null {
                 { file: path.basename(devicesFile), err: error },
             ),
         );
+        metrics?.recordError('ConfigurationError');
         return null;
     }
 
@@ -72,6 +75,7 @@ export function readDevicesConfig(): Record<string, DeviceConfig> | null {
                 { file: path.basename(devicesFile), err: error },
             ),
         );
+        metrics?.recordError('ValidationError');
         return null;
     }
 
@@ -81,6 +85,7 @@ export function readDevicesConfig(): Record<string, DeviceConfig> | null {
             logger,
             ValidationError.fromZodError(parsed.error, { file: path.basename(devicesFile) }),
         );
+        metrics?.recordError('ValidationError');
         return null;
     }
 

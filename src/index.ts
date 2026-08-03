@@ -1,6 +1,7 @@
 import { OPCUAServerManager } from './core/index.ts';
 import { createModuleLogger } from './infrastructure/logger/index.ts';
 import { AppError, ErrorCode, ExitCode, logAppError } from './errors/index.ts';
+import type { ErrorCategory } from './metrics/index.ts';
 const logger = createModuleLogger('session');
 
 const serverManager = new OPCUAServerManager();
@@ -12,6 +13,7 @@ function handleFatalError(err: unknown, source: 'uncaughtException' | 'unhandled
 
   if (err instanceof AppError) {
     logAppError(logger, err, { source });
+    serverManager.getMetrics().recordError(err.constructor.name as ErrorCategory);
   } else {
     logger.fatal({ err, source, code: ErrorCode.UNKNOWN_ERROR }, 'Unhandled error');
   }

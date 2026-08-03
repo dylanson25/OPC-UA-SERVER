@@ -34,6 +34,7 @@ Server connection settings are read from environment variables (via `.env`, load
 | `PRODUCTNAME`  | `OPCUA-Server`   | Reported as the server's product name in `buildInfo`.                                    |
 | `NODE_ENV`     | `development`    | `development` enables pretty-printed logs; any other value uses plain JSON logs.          |
 | `LOG_LEVEL`    | `debug` (dev) / `info` (prod) | Minimum [pino](https://getpino.io/) log level.                             |
+| `METRICS_LOG_INTERVAL_MS` | `0` (disabled) | If set to a positive number, logs a periodic metrics summary at that interval (ms). |
 
 The full endpoint URL a client should connect to is:
 
@@ -130,6 +131,24 @@ Category classes (`ConfigurationError`, `ValidationError`, `DeviceError`, `TagEr
 
 Every `error`-level (and above) log entry is additionally written as JSON to `logs/errors.log` (created automatically), independent of the console output — useful for production troubleshooting without needing to capture stdout. Routine `debug`-level logs (e.g. tag value changes) never go there. Log rotation/shipping is intentionally out of scope; see `logs/errors.log` growth if running long-term and add rotation externally if needed.
 
+## Runtime metrics
+
+`OPCUAServerManager.getMetrics()` exposes a `MetricsService` ([`src/metrics/`](src/metrics/)) with a pull-based snapshot API — plain data, never pre-formatted strings, so any consumer (CLI, future REST API, future GUI) can format it however it needs:
+
+```ts
+metrics.getStatus();    // { status, startTime, uptimeMs, version }
+metrics.getDevices();   // { total, devices: [{ id, name, status }] }
+metrics.getTags();      // { total, byType: { boolean, integer, float, double, string, dateTime } }
+metrics.getSessions();  // { active, sessions: [{ clientName, connectedAt }] }
+metrics.getErrors();    // { total, byCategory: { ConfigurationError, ValidationError, ... } }
+```
+
+All counters are updated incrementally as devices register/fail/get removed, tags get created, sessions open/close, and errors get logged — `get*()` calls never rescan the address space, so they're safe to poll frequently (e.g. from a health check).
+
+`status` is `'starting' | 'running' | 'degraded' | 'stopping' | 'stopped'`. `degraded` is derived automatically (not set directly): the server reports `degraded` instead of `running` whenever at least one device is in `'error'` status, or when 5+ errors have been recorded within the last 5 minutes (both configurable via `MetricsService` constructor options). This is the signal a health check should treat as unhealthy alongside `stopping`/`stopped`/`starting`.
+
+Real-time tag value change notifications are intentionally **not** part of this service — that's a push/event concern for a future `watch`-style feature, not a pull-based snapshot.
+
 ## Project structure
 
 ```
@@ -150,6 +169,7 @@ src/
 │   └── primitive.ts               # Creates a variable node with change-logging
 ├── schemas/                      # zod schemas for devices/tags
 ├── errors/                       # AppError hierarchy, ErrorCode, ExitCode, logAppError
+├── metrics/                      # MetricsService, ServerStatus/DeviceStatus types
 ├── types/                        # Shared TypeScript types
 ├── utils/
 │   └── comparison.ts             # Numeric change-detection helper
@@ -167,7 +187,7 @@ npm run test:watch    # watch mode
 npm run test:coverage # run with coverage report
 ```
 
-- `tests/**/*.test.ts` — unit tests for schemas, tag factories, `DeviceManager`, `ConfigWatcher`, config reading, and the `AppError`/`ExitCode` error system, with `node-opcua` and the filesystem mocked.
+- `tests/**/*.test.ts` — unit tests for schemas, tag factories, `DeviceManager`, `ConfigWatcher`, config reading, the `AppError`/`ExitCode` error system, and `MetricsService`, with `node-opcua` and the filesystem mocked.
 - `tests/core/opcua-server-manager.integration.test.ts` — integration tests that boot a real OPC UA server on an OS-assigned port (no mocks), load the real `devices.json`, connect with a real OPC UA client, and verify address-space creation, device loading, tag reads, and graceful shutdown end-to-end.
 
 ## Linting & formatting

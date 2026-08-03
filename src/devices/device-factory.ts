@@ -1,7 +1,8 @@
 import type { NamespaceLike, DeviceConfig } from '../types/index.ts';
+import type { MetricsService } from '../metrics/index.ts';
 import { createTag } from '../tags/factory.ts';
 
-export function createDevice(namespace: NamespaceLike, config: DeviceConfig) {
+export function createDevice(namespace: NamespaceLike, config: DeviceConfig, metrics?: MetricsService) {
   const device = namespace.addObject({
     browseName: config.name,
     organizedBy: 'ObjectsFolder',
@@ -12,6 +13,7 @@ export function createDevice(namespace: NamespaceLike, config: DeviceConfig) {
       namespace,
       device,
       config: tag,
+      metrics,
     });
   }
 
