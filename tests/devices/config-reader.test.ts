@@ -111,4 +111,74 @@ describe('readDevicesConfig', () => {
 
         expect(result).toEqual(parsedDevices);
     });
+
+    describe('metrics integration', () => {
+        const makeFakeMetrics = () => ({ recordError: vi.fn() }) as any;
+
+        it('records a ConfigurationError when no devices directory is found', () => {
+            mockedStatSync.mockImplementation(() => {
+                throw new Error('ENOENT');
+            });
+            const metrics = makeFakeMetrics();
+
+            readDevicesConfig(metrics);
+
+            expect(metrics.recordError).toHaveBeenCalledWith('ConfigurationError');
+        });
+
+        it('records a ConfigurationError when the file cannot be read', () => {
+            mockedStatSync.mockImplementationOnce(() => ({ isDirectory: () => true }) as any);
+            mockedReadFileSync.mockImplementation(() => {
+                throw new Error('EACCES');
+            });
+            const metrics = makeFakeMetrics();
+
+            readDevicesConfig(metrics);
+
+            expect(metrics.recordError).toHaveBeenCalledWith('ConfigurationError');
+        });
+
+        it('records a ValidationError when the file contains invalid JSON', () => {
+            mockedStatSync.mockImplementationOnce(() => ({ isDirectory: () => true }) as any);
+            mockedReadFileSync.mockReturnValue('{ not valid json');
+            const metrics = makeFakeMetrics();
+
+            readDevicesConfig(metrics);
+
+            expect(metrics.recordError).toHaveBeenCalledWith('ValidationError');
+        });
+
+        it('records a ValidationError when schema validation fails', () => {
+            mockedStatSync.mockImplementationOnce(() => ({ isDirectory: () => true }) as any);
+            mockedReadFileSync.mockReturnValue('{"device1": {}}');
+            mockedSafeParse.mockReturnValue({
+                success: false,
+                error: { issues: [{ path: ['device1', 'name'], message: 'Required' }] },
+            } as any);
+            const metrics = makeFakeMetrics();
+
+            readDevicesConfig(metrics);
+
+            expect(metrics.recordError).toHaveBeenCalledWith('ValidationError');
+        });
+
+        it('does not record any error when validation succeeds', () => {
+            mockedStatSync.mockImplementationOnce(() => ({ isDirectory: () => true }) as any);
+            mockedReadFileSync.mockReturnValue('{}');
+            mockedSafeParse.mockReturnValue({ success: true, data: {} } as any);
+            const metrics = makeFakeMetrics();
+
+            readDevicesConfig(metrics);
+
+            expect(metrics.recordError).not.toHaveBeenCalled();
+        });
+
+        it('does not throw when no metrics service is provided', () => {
+            mockedStatSync.mockImplementation(() => {
+                throw new Error('ENOENT');
+            });
+
+            expect(() => readDevicesConfig()).not.toThrow();
+        });
+    });
 });
