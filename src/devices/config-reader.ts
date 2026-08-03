@@ -16,7 +16,9 @@ function findDevicesDirectory(): string | null {
     for (const c of candidates) {
         try {
             if (fs.statSync(c).isDirectory()) return c;
-        } catch { }
+        } catch {
+            // Ignore errors, just continue to the next candidate
+        }
     }
 
     logger.warn({ candidates }, 'No devices directory found');
