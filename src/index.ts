@@ -1,51 +1,37 @@
-import { OPCUAServer } from 'node-opcua';
-import { serverOptions } from './config/server-config.js';
-import { loadDevices } from './devices/index.js';
-import type { SessionLike } from './types/index.js';
+import { OPCUAServerManager } from './core/index.ts';
+import { createModuleLogger } from './infrastructure/logger/index.ts';
+const logger = createModuleLogger('session');
 
-const server = new OPCUAServer(serverOptions);
+const serverManager = new OPCUAServerManager();
 
-function buildAddressSpace(): void {
-  const addressSpace = server.engine.addressSpace;
-  const namespace = addressSpace.getOwnNamespace();
+serverManager.initialize();
 
-  loadDevices(addressSpace, namespace);
-}
+const setupGracefulShutdown = (): void => {
+  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
-function describeSessionClient(session: SessionLike): string {
-  const channel =
-    session.channel || session._secureChannel || session.session?.channel;
+  signals.forEach((signal) => {
+    process.on(signal, () => {
+      logger.info({ signal }, 'Received termination signal');
 
-  const name = session.sessionName ?? session.sessionId?.toString();
-
-  return channel
-    ? `${name} client:${channel.remoteAddress}:${channel.remotePort}`
-    : (name ?? 'unknown');
-}
-
-function registerSessionLogging(): void {
-  server.on('create_session', (session: SessionLike) => {
-    console.log('create_session:', describeSessionClient(session));
+      serverManager.shutdown(() => {
+        process.exit(0);
+      });
+    });
   });
 
-  server.on('session_closed', (session: SessionLike) => {
-    console.log('session_closed:', describeSessionClient(session));
+  process.on('uncaughtException', (err) => {
+    logger.fatal({ err }, 'Uncaught exception');
+    serverManager.shutdown(() => {
+      process.exit(1);
+    });
   });
-}
 
-function startServer(): void {
-  server.start(() => {
-    const endpointUrl =
-      server.endpoints[0].endpointDescriptions()[0].endpointUrl;
-
-    console.log('Server listening (Ctrl+C to stop)');
-    console.log('port:', server.endpoints[0].port);
-    console.log('endpoint:', endpointUrl);
+  process.on('unhandledRejection', (reason) => {
+    logger.fatal({ err: reason }, 'Unhandled promise rejection');
+    serverManager.shutdown(() => {
+      process.exit(1);
+    });
   });
 }
 
-server.initialize(() => {
-  buildAddressSpace();
-  registerSessionLogging();
-  startServer();
-});
+setupGracefulShutdown();

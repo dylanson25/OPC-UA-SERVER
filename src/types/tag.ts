@@ -1,20 +1,23 @@
 import type {
-  IAddressSpace,
   INamespace,
   UAObject,
 } from 'node-opcua-address-space-base';
+import type { DataType } from 'node-opcua';
 import { TagConfig } from './index.ts';
 
-export type BooleanTagParams = {
-  /** Optional addressSpace reference (not required for creating variables) */
-  addressSpace?: IAddressSpace;
+export interface PrimitiveTagParams {
   namespace: INamespace;
   device: UAObject;
   nodeId: string;
   browseName: string;
-  initialValue?: boolean;
+  initialValue: unknown;
   minimumSamplingInterval?: number;
-};
+  dataType: string;
+  valueType: DataType;
+  parser: (value: unknown) => unknown;
+  label: string;
+  changeThreshold?: number;
+}
 
 export interface CreateTagParams {
   namespace: INamespace;

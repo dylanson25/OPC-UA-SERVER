@@ -1,81 +1,21 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { readDevicesConfig } from './config-reader.ts';
+import { createDevice } from './device-factory.ts';
+import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import type { AddressSpaceLike, NamespaceLike } from '../types/index.ts';
 
-import type {
-  AddressSpaceLike,
-  NamespaceLike,
-  DeviceConfig,
-} from '../types/index.ts';
-
-import { createDevice } from './device-factory.js';
-
-function findDevicesDirectory(): string | null {
-  const candidates = [
-    path.join(process.cwd(), 'devices'),
-    path.join(process.cwd(), 'src', 'devices'),
-    path.join(process.cwd(), 'dist', 'devices'),
-  ];
-
-  for (const c of candidates) {
-    try {
-      if (fs.statSync(c).isDirectory()) return c;
-    } catch (e) {
-      console.warn(`Devices directory not found: ${c}`);
-      console.warn(e);
-    }
-  }
-
-  return null;
-}
+const logger = createModuleLogger('address-space');
 
 export function loadDevices(
   addressSpace: AddressSpaceLike,
   namespace: NamespaceLike,
 ): void {
-  const devicesPath = findDevicesDirectory();
+  void addressSpace;
 
-  if (!devicesPath) {
-    console.warn(
-      'No devices directory found. Expected one of: ./devices, ./src/devices, ./dist/devices',
-    );
-    return;
-  }
+  const devices = readDevicesConfig();
+  if (!devices) return;
 
-  const files = fs.readdirSync(devicesPath);
-
-  const jsonFiles = files.filter((file) => file.endsWith('.json'));
-
-  const seenDevices = new Set<string>();
-
-  for (const file of jsonFiles) {
-    const fullPath = path.join(devicesPath, file);
-    const raw = fs.readFileSync(fullPath, 'utf8');
-    let config: DeviceConfig;
-    try {
-      config = JSON.parse(raw) as DeviceConfig;
-    } catch (err) {
-      console.warn(`Skipping invalid JSON device file: ${file}`);
-      console.warn(err);
-      continue;
-    }
-
-    if (seenDevices.has(config.name)) {
-      console.warn(`Skipping duplicate device definition: ${config.name}`);
-      continue;
-    }
-
-    // dedupe tags inside device by nodeId
-    const seenTagIds = new Set<string>();
-    config.tags = (config.tags || []).filter((t) => {
-      if (!t.nodeId) return false;
-      if (seenTagIds.has(t.nodeId)) return false;
-      seenTagIds.add(t.nodeId);
-      return true;
-    });
-
-    console.log(`Loading device: ${config.name}`);
-
+  for (const [deviceKey, config] of Object.entries(devices)) {
+    logger.info({ deviceKey, deviceName: config.name }, 'Loading device');
     createDevice(namespace, config);
-    seenDevices.add(config.name);
   }
 }
