@@ -3,6 +3,7 @@ import type {
   UAObject,
 } from 'node-opcua-address-space-base';
 import type { DataType } from 'node-opcua';
+import type { MetricsService } from '../metrics/index.ts';
 import { TagConfig } from './index.ts';
 
 export interface PrimitiveTagParams {
@@ -23,4 +24,5 @@ export interface CreateTagParams {
   namespace: INamespace;
   device: UAObject;
   config: TagConfig;
+  metrics?: MetricsService;
 }

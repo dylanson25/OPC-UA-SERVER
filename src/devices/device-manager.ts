@@ -1,6 +1,8 @@
 import { createDevice } from './device-factory.ts';
 import { readDevicesConfig } from './config-reader.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { DeviceError, ErrorCode, logAppError } from '../errors/index.ts';
+import type { MetricsService } from '../metrics/index.ts';
 import type { AddressSpaceLike, NamespaceLike, DeviceConfig } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
@@ -18,10 +20,11 @@ export class DeviceManager {
     constructor(
         private readonly addressSpace: AddressSpaceLike,
         private readonly namespace: NamespaceLike,
+        private readonly metrics?: MetricsService,
     ) { }
 
     load(): void {
-        const config = readDevicesConfig();
+        const config = readDevicesConfig(this.metrics);
 
         if (!config) {
             logger.warn('No device configuration to load');
@@ -39,8 +42,25 @@ export class DeviceManager {
 
         logger.info({ key, deviceName: config.name }, 'Registering device');
 
-        const node = createDevice(this.namespace, config);
+        let node: DeviceNode;
+        try {
+            node = createDevice(this.namespace, config, this.metrics);
+        } catch (err) {
+            logAppError(
+                logger,
+                new DeviceError(
+                    ErrorCode.DEVICE_REGISTRATION_FAILED,
+                    'Failed to register device',
+                    { key, deviceName: config.name, err },
+                ),
+            );
+            this.metrics?.recordError('DeviceError');
+            this.metrics?.recordDeviceError(key, config.name);
+            return;
+        }
+
         this.devices.set(key, { config, node });
+        this.metrics?.recordDeviceConnected(key, config.name);
     }
 
     remove(key: string): boolean {
@@ -59,6 +79,7 @@ export class DeviceManager {
         }
 
         this.devices.delete(key);
+        this.metrics?.recordDeviceRemoved(key);
         logger.info({ key }, 'Device removed');
         return true;
     }

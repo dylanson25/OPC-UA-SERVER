@@ -3,11 +3,16 @@ import { OPCUAServer } from 'node-opcua';
 import { serverOptions } from '../config/server-config.ts';
 import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { ErrorCode, ServerError, logAppError } from '../errors/index.ts';
+import { MetricsService } from '../metrics/index.ts';
 import type { SessionLike } from '../types/index.ts';
 
 export class OPCUAServerManager {
     private readonly logger = createModuleLogger('server');
     private readonly server: OPCUAServer;
+    private readonly metrics = new MetricsService();
+    private readonly metricsLogIntervalMs = Number(process.env.METRICS_LOG_INTERVAL_MS) || 0;
+    private metricsLogTimer: NodeJS.Timeout | null = null;
     private initialized = false;
     private isShuttingDown = false;
     private deviceManager: DeviceManager | null = null;
@@ -34,6 +39,8 @@ export class OPCUAServerManager {
             const endpoint = this.server.endpoints[0];
             const endpointUrl = endpoint?.endpointDescriptions()[0]?.endpointUrl;
 
+            this.metrics.setStatus('running');
+            this.startMetricsLogging();
             this.logger.info('Server listening (Ctrl+C to stop)');
             this.logger.info(
                 { port: endpoint?.port, endpoint: endpointUrl },
@@ -49,6 +56,7 @@ export class OPCUAServerManager {
         }
 
         this.isShuttingDown = true;
+        this.metrics.setStatus('stopping');
         this.logger.info('Shutting down OPC UA server...');
 
         const forceExitTimeout = setTimeout(() => {
@@ -61,12 +69,20 @@ export class OPCUAServerManager {
         try {
             this.server.shutdown(0, () => {
                 clearTimeout(forceExitTimeout);
+                this.metrics.setStatus('stopped');
                 this.logger.info('Server shutdown complete');
                 callback?.();
             });
         } catch (err) {
             clearTimeout(forceExitTimeout);
-            this.logger.error({ err }, 'Error during server shutdown');
+            this.metrics.setStatus('stopped');
+            logAppError(
+                this.logger,
+                new ServerError(ErrorCode.SERVER_SHUTDOWN_FAILED, 'Error during server shutdown', {
+                    err,
+                }),
+            );
+            this.metrics.recordError('ServerError');
             callback?.();
         }
     }
@@ -75,16 +91,37 @@ export class OPCUAServerManager {
         return this.deviceManager;
     }
 
+    getMetrics(): MetricsService {
+        return this.metrics;
+    }
+
     private cleanupResources(): void {
+        this.stopMetricsLogging();
         this.configWatcher?.stop();
         this.logger.debug('Resource cleanup completed');
+    }
+
+    private startMetricsLogging(): void {
+        if (this.metricsLogTimer || this.metricsLogIntervalMs <= 0) return;
+
+        this.metricsLogTimer = setInterval(() => {
+            this.metrics.logSummary();
+        }, this.metricsLogIntervalMs);
+        this.metricsLogTimer.unref();
+    }
+
+    private stopMetricsLogging(): void {
+        if (!this.metricsLogTimer) return;
+
+        clearInterval(this.metricsLogTimer);
+        this.metricsLogTimer = null;
     }
 
     private buildAddressSpace(): void {
         const addressSpace = this.server.engine.addressSpace;
         const namespace = addressSpace.getOwnNamespace();
 
-        this.deviceManager = new DeviceManager(addressSpace, namespace);
+        this.deviceManager = new DeviceManager(addressSpace, namespace, this.metrics);
         this.deviceManager.load();
 
         this.configWatcher = new ConfigWatcher(this.deviceManager);
@@ -105,10 +142,19 @@ export class OPCUAServerManager {
     private registerSessionLogging(): void {
         this.server.on('create_session', (session: SessionLike) => {
             this.logger.info({ client: this.describeSessionClient(session) }, 'create_session');
+            this.metrics.recordSessionOpened(
+                this.sessionId(session),
+                session.clientDescription?.applicationName?.text ?? 'unknown',
+            );
         });
 
         this.server.on('session_closed', (session: SessionLike) => {
             this.logger.info({ client: this.describeSessionClient(session) }, 'session_closed');
+            this.metrics.recordSessionClosed(this.sessionId(session));
         });
+    }
+
+    private sessionId(session: SessionLike): string {
+        return session.sessionId?.toString() ?? session.sessionName ?? 'unknown';
     }
 }

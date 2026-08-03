@@ -1,10 +1,27 @@
 import { OPCUAServerManager } from './core/index.ts';
 import { createModuleLogger } from './infrastructure/logger/index.ts';
+import { AppError, ErrorCode, ExitCode, logAppError } from './errors/index.ts';
+import type { ErrorCategory } from './metrics/index.ts';
 const logger = createModuleLogger('session');
 
 const serverManager = new OPCUAServerManager();
 
 serverManager.initialize();
+
+function handleFatalError(err: unknown, source: 'uncaughtException' | 'unhandledRejection'): void {
+  const exitCode = err instanceof AppError ? err.exitCode : ExitCode.UNKNOWN_ERROR;
+
+  if (err instanceof AppError) {
+    logAppError(logger, err, { source });
+    serverManager.getMetrics().recordError(err.constructor.name as ErrorCategory);
+  } else {
+    logger.fatal({ err, source, code: ErrorCode.UNKNOWN_ERROR }, 'Unhandled error');
+  }
+
+  serverManager.shutdown(() => {
+    process.exit(exitCode);
+  });
+}
 
 const setupGracefulShutdown = (): void => {
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
@@ -14,23 +31,17 @@ const setupGracefulShutdown = (): void => {
       logger.info({ signal }, 'Received termination signal');
 
       serverManager.shutdown(() => {
-        process.exit(0);
+        process.exit(ExitCode.SUCCESS);
       });
     });
   });
 
   process.on('uncaughtException', (err) => {
-    logger.fatal({ err }, 'Uncaught exception');
-    serverManager.shutdown(() => {
-      process.exit(1);
-    });
+    handleFatalError(err, 'uncaughtException');
   });
 
   process.on('unhandledRejection', (reason) => {
-    logger.fatal({ err: reason }, 'Unhandled promise rejection');
-    serverManager.shutdown(() => {
-      process.exit(1);
-    });
+    handleFatalError(reason, 'unhandledRejection');
   });
 }
 

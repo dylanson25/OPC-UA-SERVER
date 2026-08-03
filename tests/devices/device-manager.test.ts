@@ -37,6 +37,15 @@ const makeConfig = (name: string, overrides = {}): DeviceConfig => ({
     ...overrides,
 });
 
+function makeFakeMetrics() {
+    return {
+        recordDeviceConnected: vi.fn(),
+        recordDeviceError: vi.fn(),
+        recordDeviceRemoved: vi.fn(),
+        recordError: vi.fn(),
+    } as any;
+}
+
 beforeEach(() => {
     vi.clearAllMocks();
 });
@@ -49,7 +58,7 @@ describe('DeviceManager', () => {
 
             manager.register('device1', config);
 
-            expect(mockedCreateDevice).toHaveBeenCalledWith(fakeNamespace, config);
+            expect(mockedCreateDevice).toHaveBeenCalledWith(fakeNamespace, config, undefined);
         });
 
         it('adds the device to the internal registry, visible via list()', () => {
@@ -71,6 +80,35 @@ describe('DeviceManager', () => {
 
             expect(mockedCreateDevice).toHaveBeenCalledTimes(1);
             expect(manager.list()).toEqual([{ key: 'device1', config: config1 }]);
+        });
+
+        it('does not crash and skips the device when createDevice throws', () => {
+            mockedCreateDevice.mockImplementationOnce(() => {
+                throw new Error('node-opcua failed to create object');
+            });
+
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+            const config = makeConfig('Motor1');
+
+            expect(() => manager.register('device1', config)).not.toThrow();
+            expect(manager.list()).toEqual([]);
+        });
+
+        it('still registers the remaining devices when one device fails to register', () => {
+            mockedCreateDevice
+                .mockImplementationOnce(() => {
+                    throw new Error('node-opcua failed to create object');
+                })
+                .mockReturnValueOnce({ browseName: 'Motor2' } as any);
+
+            const config1 = makeConfig('Motor1');
+            const config2 = makeConfig('Motor2');
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+
+            manager.register('device1', config1);
+            manager.register('device2', config2);
+
+            expect(manager.list()).toEqual([{ key: 'device2', config: config2 }]);
         });
     });
 
@@ -227,6 +265,51 @@ describe('DeviceManager', () => {
 
             expect(result).toBe(true);
             expect(manager.list()).toEqual([]);
+        });
+    });
+
+    describe('metrics integration', () => {
+        it('records a connected device on successful registration', () => {
+            const metrics = makeFakeMetrics();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, metrics);
+            const config = makeConfig('Motor1');
+
+            manager.register('device1', config);
+
+            expect(metrics.recordDeviceConnected).toHaveBeenCalledWith('device1', 'Motor1');
+            expect(metrics.recordDeviceError).not.toHaveBeenCalled();
+        });
+
+        it('records a device error and a DeviceError when createDevice throws', () => {
+            mockedCreateDevice.mockImplementationOnce(() => {
+                throw new Error('node-opcua failed to create object');
+            });
+            const metrics = makeFakeMetrics();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, metrics);
+            const config = makeConfig('Motor1');
+
+            manager.register('device1', config);
+
+            expect(metrics.recordDeviceError).toHaveBeenCalledWith('device1', 'Motor1');
+            expect(metrics.recordError).toHaveBeenCalledWith('DeviceError');
+            expect(metrics.recordDeviceConnected).not.toHaveBeenCalled();
+        });
+
+        it('records a removed device on successful remove()', () => {
+            mockedCreateDevice.mockReturnValueOnce({ browseName: 'Motor1' } as any);
+            const metrics = makeFakeMetrics();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, metrics);
+            manager.register('device1', makeConfig('Motor1'));
+
+            manager.remove('device1');
+
+            expect(metrics.recordDeviceRemoved).toHaveBeenCalledWith('device1');
+        });
+
+        it('does not throw when no metrics service is provided', () => {
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+
+            expect(() => manager.register('device1', makeConfig('Motor1'))).not.toThrow();
         });
     });
 });

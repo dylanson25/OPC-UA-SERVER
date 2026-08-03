@@ -2,11 +2,12 @@ import * as opcua from 'node-opcua';
 
 import { addPrimitiveTag } from './primitive.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { ErrorCode, TagError, logAppError } from '../errors/index.ts';
 import type { CreateTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
 
-export function createTag({ namespace, device, config }: CreateTagParams): void {
+export function createTag({ namespace, device, config, metrics }: CreateTagParams): void {
   switch (config.type) {
     case 'boolean':
       addPrimitiveTag({
@@ -20,6 +21,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         parser: (value) => Boolean(value ?? false),
         label: 'Boolean',
       });
+      metrics?.recordTagCreated('boolean');
       return;
     case 'integer':
       addPrimitiveTag({
@@ -34,6 +36,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         label: 'Integer',
         changeThreshold: config.threshold
       });
+      metrics?.recordTagCreated('integer');
       return;
     case 'float':
       addPrimitiveTag({
@@ -48,6 +51,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         label: 'Float',
         changeThreshold: config.threshold
       });
+      metrics?.recordTagCreated('float');
       return;
     case 'double':
       addPrimitiveTag({
@@ -62,6 +66,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         label: 'Double',
         changeThreshold: config.threshold
       });
+      metrics?.recordTagCreated('double');
       return;
     case 'string':
       addPrimitiveTag({
@@ -75,6 +80,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         parser: (value) => String(value ?? ''),
         label: 'String',
       });
+      metrics?.recordTagCreated('string');
       return;
     case 'dateTime':
       addPrimitiveTag({
@@ -91,9 +97,20 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
           new Date(value instanceof Date ? value : String(value ?? new Date())),
         label: 'DateTime',
       });
+      metrics?.recordTagCreated('dateTime');
       return;
-    default:
-      logger.warn({ tagType: 'unknown' }, 'Unsupported tag type');
+    default: {
+      const unsupported = config as { type?: unknown; browseName?: string };
+      logAppError(
+        logger,
+        new TagError(
+          ErrorCode.TAG_TYPE_NOT_SUPPORTED,
+          'Unsupported tag type',
+          { tagType: unsupported.type, browseName: unsupported.browseName },
+        ),
+      );
+      metrics?.recordError('TagError');
       return;
+    }
   }
 }
