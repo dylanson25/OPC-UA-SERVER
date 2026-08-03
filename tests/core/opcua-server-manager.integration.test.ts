@@ -50,7 +50,7 @@ describe('OPCUAServerManager integration', () => {
     let port: number;
     let hasShutDown = false;
 
-    const createTestClient = (props: {} = {}) => {
+    const createTestClient = (props: any = {}) => {
         return OPCUAClient.create({
             endpointMustExist: false,
             applicationUri: 'urn:node-opcua:MyClient',
