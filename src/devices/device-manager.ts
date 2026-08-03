@@ -1,6 +1,7 @@
 import { createDevice } from './device-factory.ts';
 import { readDevicesConfig } from './config-reader.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { DeviceError, ErrorCode, logAppError } from '../errors/index.ts';
 import type { AddressSpaceLike, NamespaceLike, DeviceConfig } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
@@ -39,7 +40,21 @@ export class DeviceManager {
 
         logger.info({ key, deviceName: config.name }, 'Registering device');
 
-        const node = createDevice(this.namespace, config);
+        let node: DeviceNode;
+        try {
+            node = createDevice(this.namespace, config);
+        } catch (err) {
+            logAppError(
+                logger,
+                new DeviceError(
+                    ErrorCode.DEVICE_REGISTRATION_FAILED,
+                    'Failed to register device',
+                    { key, deviceName: config.name, err },
+                ),
+            );
+            return;
+        }
+
         this.devices.set(key, { config, node });
     }
 

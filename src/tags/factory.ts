@@ -2,6 +2,7 @@ import * as opcua from 'node-opcua';
 
 import { addPrimitiveTag } from './primitive.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { ErrorCode, TagError, logAppError } from '../errors/index.ts';
 import type { CreateTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
@@ -92,8 +93,17 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         label: 'DateTime',
       });
       return;
-    default:
-      logger.warn({ tagType: 'unknown' }, 'Unsupported tag type');
+    default: {
+      const unsupported = config as { type?: unknown; browseName?: string };
+      logAppError(
+        logger,
+        new TagError(
+          ErrorCode.TAG_TYPE_NOT_SUPPORTED,
+          'Unsupported tag type',
+          { tagType: unsupported.type, browseName: unsupported.browseName },
+        ),
+      );
       return;
+    }
   }
 }
