@@ -28,9 +28,7 @@ export class DeviceManager {
             return;
         }
 
-        for (const [key, deviceConfig] of Object.entries(config)) {
-            this.register(key, deviceConfig);
-        }
+        this.registerAll(config);
     }
 
     register(key: string, config: DeviceConfig): void {
@@ -72,13 +70,34 @@ export class DeviceManager {
         }));
     }
 
-    reload(): void {
+    /**
+     * @returns true if the reload was applied, false if it was cancelled due to an invalid configuration.
+     */
+    reload(): boolean {
         logger.info('Reloading device configuration');
+
+        const newConfig = readDevicesConfig();
+
+        if (!newConfig) {
+            logger.error(
+                'Reload aborted: new configuration is invalid, existing devices remain unchanged',
+            );
+            return false;
+        }
 
         for (const key of Array.from(this.devices.keys())) {
             this.remove(key);
         }
 
-        this.load();
+        this.registerAll(newConfig);
+
+        logger.info({ deviceCount: this.devices.size }, 'Device configuration reloaded');
+        return true;
+    }
+
+    private registerAll(config: Record<string, DeviceConfig>): void {
+        for (const [key, deviceConfig] of Object.entries(config)) {
+            this.register(key, deviceConfig);
+        }
     }
 }

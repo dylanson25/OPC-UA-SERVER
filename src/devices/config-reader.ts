@@ -12,7 +12,7 @@ const candidates = [
     path.join(process.cwd(), 'dist', 'devices'),
 ];
 
-function findDevicesDirectory(): string | null {
+export function findDevicesDirectory(): string | null {
     for (const c of candidates) {
         try {
             if (fs.statSync(c).isDirectory()) return c;
@@ -23,6 +23,12 @@ function findDevicesDirectory(): string | null {
 
     logger.warn({ candidates }, 'No devices directory found');
     return null;
+}
+
+export function getDevicesFilePath(): string | null {
+    const dir = findDevicesDirectory();
+    if (!dir) return null;
+    return path.join(dir, 'devices.json');
 }
 
 export function readDevicesConfig(): Record<string, DeviceConfig> | null {
