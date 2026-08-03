@@ -1,7 +1,7 @@
 import { OPCUAServer } from 'node-opcua';
 
 import { serverOptions } from '../config/server-config.ts';
-import { DeviceManager } from '../devices/index.ts';
+import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import type { SessionLike } from '../types/index.ts';
 
@@ -11,6 +11,7 @@ export class OPCUAServerManager {
     private initialized = false;
     private isShuttingDown = false;
     private deviceManager: DeviceManager | null = null;
+    private configWatcher: ConfigWatcher | null = null;
 
     constructor() {
         this.server = new OPCUAServer(serverOptions);
@@ -75,6 +76,7 @@ export class OPCUAServerManager {
     }
 
     private cleanupResources(): void {
+        this.configWatcher?.stop();
         this.logger.debug('Resource cleanup completed');
     }
 
@@ -84,6 +86,9 @@ export class OPCUAServerManager {
 
         this.deviceManager = new DeviceManager(addressSpace, namespace);
         this.deviceManager.load();
+
+        this.configWatcher = new ConfigWatcher(this.deviceManager);
+        this.configWatcher.start();
     }
 
     private describeSessionClient(session: SessionLike): string {
