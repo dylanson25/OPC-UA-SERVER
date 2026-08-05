@@ -36,6 +36,20 @@ export function addPrimitiveTag({
             set: (variant: { value: unknown }) => {
                 const newValue = parser(variant.value);
 
+                // Unconditional: only ever visible at --log-level trace (pino's own level
+                // filtering no-ops this call otherwise), for diagnosing whether the
+                // changeThreshold deadband below is filtering out updates you expect to see.
+                logger.trace(
+                    {
+                        device: device.browseName.toString(),
+                        nodeId: nodeId.toString(),
+                        browseName,
+                        oldValue: currentValue,
+                        newValue,
+                    },
+                    `${label} tag value updated`,
+                );
+
                 if (hasSignificantChange(currentValue, newValue, changeThreshold)) {
                     logger.debug(
                         {

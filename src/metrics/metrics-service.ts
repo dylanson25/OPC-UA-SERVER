@@ -1,7 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
+import { getPackageVersion } from '../utils/index.ts';
 import type {
     DeviceMetrics,
     DeviceSnapshot,
@@ -20,16 +18,6 @@ const logger = createModuleLogger('metrics');
 
 const DEFAULT_DEGRADED_ERROR_THRESHOLD = 5;
 const DEFAULT_DEGRADED_WINDOW_MS = 5 * 60_000;
-
-function readPackageVersion(): string {
-    try {
-        const raw = fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8');
-        const pkg = JSON.parse(raw) as { version?: string };
-        return pkg.version ?? 'unknown';
-    } catch {
-        return 'unknown';
-    }
-}
 
 const emptyTagCounts = (): TagMetrics['byType'] => ({
     boolean: 0,
@@ -74,7 +62,7 @@ export class MetricsService {
         this.startTime = this.now();
         this.degradedErrorThreshold = options.degradedErrorThreshold ?? DEFAULT_DEGRADED_ERROR_THRESHOLD;
         this.degradedWindowMs = options.degradedWindowMs ?? DEFAULT_DEGRADED_WINDOW_MS;
-        this.version = readPackageVersion();
+        this.version = getPackageVersion();
     }
 
     setStatus(status: ServerStatus): void {
