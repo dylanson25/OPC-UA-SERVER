@@ -11,6 +11,9 @@ const logger = createModuleLogger('address-space');
 
 const candidates = [
     path.join(process.cwd(), 'src', 'devices'),
+    // Docker volume-mount convention (`-v ./devices:/app/devices`): checked before the
+    // image's own baked-in default at dist/devices so a mounted override wins.
+    path.join(process.cwd(), 'devices'),
     path.join(process.cwd(), 'dist', 'devices'),
 ];
 
