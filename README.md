@@ -67,6 +67,56 @@ endpoint: opc.tcp://127.0.0.1:4840/UA/
 
 Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shutdown).
 
+## CLI
+
+A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate` today, with more commands to come.
+
+```bash
+opcua-server --help
+opcua-server --version
+```
+
+**`start`** — starts the server, same as `npm start`, with optional overrides:
+
+```bash
+opcua-server start
+opcua-server start --config ./configs/plc-line-1.json --hostname 192.168.0.150 --port 4880 --log-level debug
+```
+
+| Flag | Overrides |
+| --- | --- |
+| `--config <path>` | Which devices.json-shaped file to load, instead of the normal search (`src/devices/` → `./devices/` → `dist/devices/`). |
+| `--hostname <address>` | `HOSTNAME` |
+| `--port <number>` | `PORT` |
+| `--log-level <level>` | `LOG_LEVEL` — one of `fatal, error, warn, info, debug, trace, silent`. |
+
+Overrides are applied **in memory only** for that run — nothing is written back to `.env` or any config file. Priority is CLI flag > environment variable > default; a flag left unset falls through to whatever `.env`/the environment already has.
+
+`--log-level trace` makes every tag value update get logged (not just ones that pass the significant-change deadband) — useful for checking whether the deadband itself is filtering out an update you expected to see. At `debug` and above, only deadband-passing changes are logged (existing behavior).
+
+**`validate`** — checks a device configuration file without starting the server:
+
+```bash
+opcua-server validate devices.json
+```
+
+```
+✓ devices.json is valid — 2 device(s), 7 tag(s).
+```
+
+On failure, it prints the structured error code and message (from the `AppError` hierarchy — see below) and exits with the matching `ExitCode`:
+
+```
+$ opcua-server validate ./broken.json
+DEVICE_CONFIG_INVALID
+
+Path:
+PLC1.tags.1.nodeId
+
+Reason:
+Duplicate nodeId: 'ns=1;s=Dup'.
+```
+
 ## Running with Docker
 
 Build the image (multi-stage: installs full deps to run `tsc`, then a separate production-only `npm ci --omit=dev` layer for the final image):
@@ -189,7 +239,15 @@ Real-time tag value change notifications are intentionally **not** part of this 
 
 ```
 src/
-├── index.ts                     # Entry point: creates the server, wires up graceful shutdown
+├── index.ts                     # npm start entry point: thin wrapper around server-runner.ts
+├── server-runner.ts             # startServer(): manager + graceful shutdown wiring (shared with the CLI)
+├── cli/                         # commander.js CLI (see "CLI" above)
+│   ├── bin.ts                   # `opcua-server` binary entry point
+│   ├── program.ts               # Builds the root Command; exitOverride -> ExitCode mapping
+│   ├── log-levels.ts            # Shared --log-level validation
+│   └── commands/
+│       ├── start.ts             # opcua-server start
+│       └── validate.ts          # opcua-server validate <file>
 ├── config/
 │   └── server-config.ts         # Reads env vars into OPCUAServer options
 ├── core/
@@ -208,7 +266,8 @@ src/
 ├── metrics/                      # MetricsService, ServerStatus/DeviceStatus types
 ├── types/                        # Shared TypeScript types
 ├── utils/
-│   └── comparison.ts             # Numeric change-detection helper
+│   ├── comparison.ts             # Numeric change-detection helper
+│   └── package-info.ts           # getPackageVersion() (used by --version and runtime metrics)
 └── infrastructure/
     └── logger/                   # pino logger setup (console + logs/errors.log)
 
@@ -229,7 +288,7 @@ npm run test:watch    # watch mode
 npm run test:coverage # run with coverage report
 ```
 
-- `tests/**/*.test.ts` — unit tests for schemas, tag factories, `DeviceManager`, `ConfigWatcher`, config reading, the `AppError`/`ExitCode` error system, and `MetricsService`, with `node-opcua` and the filesystem mocked.
+- `tests/**/*.test.ts` — unit tests for schemas, tag factories, `DeviceManager`, `ConfigWatcher`, config reading, the `AppError`/`ExitCode` error system, `MetricsService`, and the CLI (option parsing, env-var override priority, `validate` output/exit codes), with `node-opcua` and the filesystem mocked.
 - `tests/core/opcua-server-manager.integration.test.ts` — integration tests that boot a real OPC UA server on an OS-assigned port (no mocks), load the real `devices.json`, connect with a real OPC UA client, and verify address-space creation, device loading, tag reads, and graceful shutdown end-to-end.
 
 ## Linting & formatting
