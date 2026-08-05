@@ -6,6 +6,9 @@
   "author": "",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "opcua-server": "./dist/cli/bin.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rimraf dist",
@@ -20,6 +23,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "commander": "^15.0.0",
     "dotenv": "^17.4.2",
     "node-opcua-samples": "^2.169.0",
     "pino": "^10.3.1",
