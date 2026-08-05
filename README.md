@@ -67,6 +67,42 @@ endpoint: opc.tcp://127.0.0.1:4840/UA/
 
 Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shutdown).
 
+## Running with Docker
+
+Build the image (multi-stage: installs full deps to run `tsc`, then a separate production-only `npm ci --omit=dev` layer for the final image):
+
+```bash
+docker build -t opcua-server .
+```
+
+Run it, publishing the OPC UA port to the host:
+
+```bash
+docker run --rm -p 4840:48040 opcua-server
+```
+
+The image ships with sensible container defaults baked in via `ENV` (overridable with `-e`): `NODE_ENV=production`, `PORT=48040`, `HOSTNAME=0.0.0.0`, `LOG_LEVEL=info`. **`HOSTNAME=0.0.0.0` matters** — the app's own default (`127.0.0.1`) would bind only inside the container's network namespace and be unreachable from the host or other containers.
+
+### Overriding device configuration without rebuilding
+
+The image bakes in the project's own `devices.json` as a default. To use your own instead, mount a directory containing a `devices.json` at `/app/devices`:
+
+```bash
+docker run --rm -p 4840:48040 -v ./my-devices:/app/devices opcua-server
+```
+
+`findDevicesDirectory()` checks `/app/devices` before falling back to the image's built-in default, so the mounted file wins — no rebuild needed. Hot-reload (see above) works the same way inside the container: edit the mounted file and the running server picks it up.
+
+### Health check
+
+The image defines a `HEALTHCHECK` ([`scripts/docker-healthcheck.cjs`](scripts/docker-healthcheck.cjs)) that checks the configured port accepts a TCP connection — a lightweight, dependency-free liveness check (not a full OPC UA handshake). Check status with:
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' <container>
+```
+
+Stopping the container (`docker stop`) sends `SIGTERM` to the Node process directly (the `Dockerfile`'s `CMD` uses exec form so Node is PID 1), triggering the same graceful-shutdown path as running locally.
+
 ## Device configuration
 
 Devices are defined in [`src/devices/devices.json`](src/devices/devices.json) as a map of `deviceKey -> device`:
@@ -175,6 +211,12 @@ src/
 │   └── comparison.ts             # Numeric change-detection helper
 └── infrastructure/
     └── logger/                   # pino logger setup (console + logs/errors.log)
+
+scripts/
+└── docker-healthcheck.cjs        # Docker HEALTHCHECK: TCP-connect check (see above)
+
+Dockerfile                        # Multi-stage build (see "Running with Docker" above)
+.dockerignore
 ```
 
 ## Testing
