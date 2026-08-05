@@ -1,13 +1,21 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockedLogger = vi.hoisted(() => ({
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+}));
 
 vi.mock('../../src/infrastructure/logger/index.ts', () => ({
-    createModuleLogger: () => ({
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-    }),
+    createModuleLogger: () => mockedLogger,
 }));
+
+beforeEach(() => {
+    mockedLogger.trace.mockClear();
+    mockedLogger.debug.mockClear();
+});
 
 import * as opcua from 'node-opcua';
 import { addPrimitiveTag } from '../../src/tags/primitive.ts';
@@ -271,6 +279,83 @@ describe('addPrimitiveTag', () => {
             set({ value: 3 });
 
             expect(get().value).toBe(3);
+        });
+
+        it('logs at trace level on every update, even when the change is not significant', () => {
+            const { namespace, getOptions } = makeFakeNamespace();
+            const device = makeFakeDevice();
+
+            addPrimitiveTag({
+                namespace,
+                device,
+                nodeId: 'ns=1;s=Temp',
+                browseName: 'Temperature',
+                initialValue: 20.0,
+                dataType: 'Double',
+                valueType: opcua.DataType.Double,
+                parser: (v) => Number(v),
+                label: 'Temperature',
+                changeThreshold: 5,
+            });
+
+            getOptions().value.set({ value: 20.1 }); // well within the threshold
+
+            expect(mockedLogger.trace).toHaveBeenCalledTimes(1);
+            expect(mockedLogger.debug).not.toHaveBeenCalled();
+
+            const [payload, message] = mockedLogger.trace.mock.calls[0];
+            expect(message).toBe('Temperature tag value updated');
+            expect(payload).toMatchObject({ oldValue: 20.0, newValue: 20.1 });
+        });
+
+        it('logs at both trace and debug level when the change is significant', () => {
+            const { namespace, getOptions } = makeFakeNamespace();
+            const device = makeFakeDevice();
+
+            addPrimitiveTag({
+                namespace,
+                device,
+                nodeId: 'ns=1;s=Temp',
+                browseName: 'Temperature',
+                initialValue: 20.0,
+                dataType: 'Double',
+                valueType: opcua.DataType.Double,
+                parser: (v) => Number(v),
+                label: 'Temperature',
+                changeThreshold: 0.01,
+            });
+
+            getOptions().value.set({ value: 25 });
+
+            expect(mockedLogger.trace).toHaveBeenCalledTimes(1);
+            expect(mockedLogger.debug).toHaveBeenCalledTimes(1);
+            expect(mockedLogger.debug.mock.calls[0][1]).toBe('Temperature tag changed');
+        });
+
+        it('logs at trace level for every sequential update regardless of significance', () => {
+            const { namespace, getOptions } = makeFakeNamespace();
+            const device = makeFakeDevice();
+
+            addPrimitiveTag({
+                namespace,
+                device,
+                nodeId: 'ns=1;s=Count',
+                browseName: 'Count',
+                initialValue: 0,
+                dataType: 'Integer',
+                valueType: opcua.DataType.Int32,
+                parser: (v) => Number(v),
+                label: 'Count',
+                changeThreshold: 0.01,
+            });
+
+            const { set } = getOptions().value;
+
+            set({ value: 1 });
+            set({ value: 2 });
+            set({ value: 3 });
+
+            expect(mockedLogger.trace).toHaveBeenCalledTimes(3);
         });
     });
 });
