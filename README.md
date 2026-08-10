@@ -117,6 +117,10 @@ Reason:
 Duplicate nodeId: 'ns=1;s=Dup'.
 ```
 
+### Talking to an already-running server
+
+`start`/`validate` above are standalone — but commands that need to reach into a server that's *already running* from a separate CLI invocation (`reload`/`info`, `healthcheck`, `watch`/`get`) go through a dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
+
 ## Running with Docker
 
 Build the image (multi-stage: installs full deps to run `tsc`, then a separate production-only `npm ci --omit=dev` layer for the final image):
@@ -264,6 +268,7 @@ src/
 ├── schemas/                      # zod schemas for devices/tags
 ├── errors/                       # AppError hierarchy, ErrorCode, ExitCode, logAppError
 ├── metrics/                      # MetricsService, ServerStatus/DeviceStatus types
+├── control/                      # CLI <-> running-server channel: ControlServer, ControlClient (see above)
 ├── types/                        # Shared TypeScript types
 ├── utils/
 │   ├── comparison.ts             # Numeric change-detection helper
@@ -273,6 +278,8 @@ src/
 
 scripts/
 └── docker-healthcheck.cjs        # Docker HEALTHCHECK: TCP-connect check (see above)
+
+docs/decisions/                   # Architecture decision records (e.g. the control channel transport choice)
 
 Dockerfile                        # Multi-stage build (see "Running with Docker" above)
 .dockerignore
