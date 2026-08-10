@@ -11,4 +11,5 @@ export type LogModule =
     | 'subscription'
     | 'security'
     | 'address-space'
-    | 'metrics';
+    | 'metrics'
+    | 'control';
