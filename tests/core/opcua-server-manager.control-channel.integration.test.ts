@@ -88,6 +88,48 @@ describe('OPCUAServerManager control channel integration', () => {
         expect(manager.getControlServer()).toBeDefined();
     });
 
+    it('info reports the real device/tag/session counts from the running server', async () => {
+        const client = new ControlClient(getControlSocketPath(port));
+        await client.connect();
+
+        const info = await client.request<{
+            version: string;
+            status: string;
+            devices: number;
+            tags: number;
+            sessions: number;
+        }>('info');
+
+        expect(info.status).toBe('running');
+        expect(info.devices).toBe(manager.getDeviceManager()?.list().length);
+        expect(typeof info.tags).toBe('number');
+        expect(info.tags).toBeGreaterThan(0);
+        expect(info.sessions).toBe(0);
+
+        client.disconnect();
+    });
+
+    it('reload triggers a real DeviceManager reload without corrupting tag counts', async () => {
+        const client = new ControlClient(getControlSocketPath(port));
+        await client.connect();
+
+        const before = await client.request<{ tags: number; devices: number }>('info');
+
+        const reloadResult = await client.request<{ reloaded: true; deviceCount: number }>('reload');
+        expect(reloadResult.reloaded).toBe(true);
+        expect(reloadResult.deviceCount).toBe(before.devices);
+
+        const after = await client.request<{ tags: number; devices: number }>('info');
+
+        // Regression coverage for a real bug found while implementing #38: tag counts
+        // used to double on every reload because removed devices' tags were never
+        // decremented from MetricsService.
+        expect(after.tags).toBe(before.tags);
+        expect(after.devices).toBe(before.devices);
+
+        client.disconnect();
+    });
+
     it('is unreachable after shutdown', async () => {
         hasShutDown = true;
         await new Promise<void>((resolve) => manager.shutdown(() => resolve()));
