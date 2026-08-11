@@ -4,6 +4,8 @@ import { getPackageVersion } from '../utils/index.ts';
 import { ExitCode } from '../errors/index.ts';
 import { registerStartCommand } from './commands/start.ts';
 import { registerValidateCommand } from './commands/validate.ts';
+import { registerReloadCommand } from './commands/reload.ts';
+import { registerInfoCommand } from './commands/info.ts';
 
 /**
  * Builds the root `opcua-server` Command — exported (not just executed) so tests can
@@ -24,6 +26,8 @@ export function createProgram(): Command {
                 'Examples:',
                 '  $ opcua-server start',
                 '  $ opcua-server validate devices.json',
+                '  $ opcua-server reload',
+                '  $ opcua-server info',
                 '  $ opcua-server --version',
                 '',
             ].join('\n'),
@@ -44,6 +48,8 @@ export function createProgram(): Command {
 
     registerStartCommand(program);
     registerValidateCommand(program);
+    registerReloadCommand(program);
+    registerInfoCommand(program);
 
     return program;
 }

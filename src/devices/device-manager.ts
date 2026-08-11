@@ -80,6 +80,9 @@ export class DeviceManager {
 
         this.devices.delete(key);
         this.metrics?.recordDeviceRemoved(key);
+        for (const tag of entry.config.tags) {
+            this.metrics?.recordTagRemoved(tag.type);
+        }
         logger.info({ key }, 'Device removed');
         return true;
     }
@@ -97,7 +100,7 @@ export class DeviceManager {
     reload(): boolean {
         logger.info('Reloading device configuration');
 
-        const newConfig = readDevicesConfig();
+        const newConfig = readDevicesConfig(this.metrics);
 
         if (!newConfig) {
             logger.error(
