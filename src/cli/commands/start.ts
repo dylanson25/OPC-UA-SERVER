@@ -1,14 +1,7 @@
-import { Command, InvalidArgumentError } from 'commander';
+import { Command } from 'commander';
 
 import { PINO_LOG_LEVELS, parseLogLevel } from '../log-levels.ts';
-
-function parsePort(value: string): number {
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
-        throw new InvalidArgumentError(`Invalid port "${value}". Must be an integer between 1 and 65535.`);
-    }
-    return parsed;
-}
+import { parseTargetPort } from '../target-port.ts';
 
 interface StartOptions {
     config?: string;
@@ -37,7 +30,7 @@ export function registerStartCommand(program: Command): void {
         .description('Start the OPC UA server using the current configuration')
         .option('--config <path>', 'Load an alternative device configuration file')
         .option('--hostname <address>', 'Override the OPC UA server hostname')
-        .option('--port <number>', 'Override the OPC UA endpoint port', parsePort)
+        .option('--port <number>', 'Override the OPC UA endpoint port', parseTargetPort)
         .option('--log-level <level>', `Override the log level (${PINO_LOG_LEVELS.join(', ')})`, parseLogLevel)
         .addHelpText(
             'after',

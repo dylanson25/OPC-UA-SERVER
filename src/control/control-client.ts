@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { ErrorCode, ServerError } from '../errors/index.ts';
 import { readNdjson, writeNdjson } from './ndjson.ts';
+import { RemoteControlError } from './protocol.ts';
 import type { ClientMessage, ServerMessage } from './protocol.ts';
 
 interface PendingRequest {
@@ -146,7 +147,9 @@ export class ControlClient {
             // with an explicit equality check — a distinct TS quirk from the flat-union
             // one worked around in src/devices/config-reader.ts, confirmed in isolation.
             if (message.ok === false) {
-                pending.reject(new ServerError(message.error.code as ErrorCode, message.error.message));
+                pending.reject(
+                    new RemoteControlError(message.error.code, message.error.message, message.error.exitCode),
+                );
                 return;
             }
 

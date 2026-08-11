@@ -85,6 +85,10 @@ export class MetricsService {
         this.tagCountsByType[type] += 1;
     }
 
+    recordTagRemoved(type: TagType): void {
+        this.tagCountsByType[type] = Math.max(0, this.tagCountsByType[type] - 1);
+    }
+
     recordSessionOpened(sessionId: string, clientName: string): void {
         this.sessions.set(sessionId, {
             clientName,

@@ -3,9 +3,10 @@ import { OPCUAServer } from 'node-opcua';
 import { serverOptions } from '../config/server-config.ts';
 import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
-import { ErrorCode, ServerError, logAppError } from '../errors/index.ts';
+import { ConfigurationError, ErrorCode, RuntimeError, ServerError, logAppError } from '../errors/index.ts';
 import { MetricsService } from '../metrics/index.ts';
 import { ControlServer, getControlSocketPath } from '../control/index.ts';
+import type { ReloadResult, InfoResult } from '../control/index.ts';
 import type { SessionLike } from '../types/index.ts';
 
 const CONTROL_HEARTBEAT_INTERVAL_MS = 5000;
@@ -107,10 +108,10 @@ export class OPCUAServerManager {
     }
 
     /**
-     * Registers the reference handlers/channels that back this issue's own
-     * acceptance criteria (a working request/response call and a working
-     * subscription) — not stand-ins for #38-40's actual `info`/`healthcheck`/`watch`
-     * commands, which register their own handlers on this same channel.
+     * Registers every request handler the control channel (#37) currently serves —
+     * the `ping`/`heartbeat` reference pair from #37 itself, plus the real `reload`
+     * and `info` commands (#38). #39/#40 register their own handlers here the same
+     * way rather than opening a separate channel.
      */
     private startControlChannel(): void {
         this.controlServer.registerHandler('ping', () => ({
@@ -118,12 +119,60 @@ export class OPCUAServerManager {
             uptimeMs: this.metrics.getStatus().uptimeMs,
         }));
 
+        this.controlServer.registerHandler('reload', () => this.handleReloadRequest());
+        this.controlServer.registerHandler('info', () => this.handleInfoRequest());
+
         this.controlServer.start();
 
         this.controlHeartbeatTimer = setInterval(() => {
             this.controlServer.publish('heartbeat', { time: new Date().toISOString() });
         }, CONTROL_HEARTBEAT_INTERVAL_MS);
         this.controlHeartbeatTimer.unref();
+    }
+
+    private handleReloadRequest(): ReloadResult {
+        const deviceManager = this.deviceManager;
+        if (!deviceManager) {
+            // Unreachable in practice: the control channel only starts (see start(),
+            // above) after buildAddressSpace() has already set this.deviceManager.
+            // Guarded rather than asserted so a future refactor can't turn it into a
+            // silent crash of the control channel's handler dispatch.
+            throw new RuntimeError(ErrorCode.UNKNOWN_ERROR, 'Device manager not initialized');
+        }
+
+        const before = new Set(deviceManager.list().map((d) => d.key));
+        const success = deviceManager.reload();
+
+        if (!success) {
+            throw new ConfigurationError(
+                ErrorCode.DEVICE_CONFIG_INVALID,
+                'Device configuration reload failed: the new configuration is invalid. Previous devices remain active.',
+            );
+        }
+
+        const afterList = deviceManager.list();
+        const after = new Set(afterList.map((d) => d.key));
+
+        return {
+            reloaded: true,
+            deviceCount: afterList.length,
+            devices: afterList.map((d) => ({ key: d.key, name: d.config.name })),
+            added: [...after].filter((key) => !before.has(key)),
+            removed: [...before].filter((key) => !after.has(key)),
+        };
+    }
+
+    private handleInfoRequest(): InfoResult {
+        const status = this.metrics.getStatus();
+
+        return {
+            version: status.version,
+            status: status.status,
+            uptimeMs: status.uptimeMs,
+            devices: this.metrics.getDevices().total,
+            tags: this.metrics.getTags().total,
+            sessions: this.metrics.getSessions().active,
+        };
     }
 
     private cleanupResources(): void {
