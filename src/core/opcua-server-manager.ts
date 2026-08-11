@@ -5,14 +5,19 @@ import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { ErrorCode, ServerError, logAppError } from '../errors/index.ts';
 import { MetricsService } from '../metrics/index.ts';
+import { ControlServer, getControlSocketPath } from '../control/index.ts';
 import type { SessionLike } from '../types/index.ts';
+
+const CONTROL_HEARTBEAT_INTERVAL_MS = 5000;
 
 export class OPCUAServerManager {
     private readonly logger = createModuleLogger('server');
     private readonly server: OPCUAServer;
     private readonly metrics = new MetricsService();
+    private readonly controlServer = new ControlServer(getControlSocketPath(serverOptions.port));
     private readonly metricsLogIntervalMs = Number(process.env.METRICS_LOG_INTERVAL_MS) || 0;
     private metricsLogTimer: NodeJS.Timeout | null = null;
+    private controlHeartbeatTimer: NodeJS.Timeout | null = null;
     private initialized = false;
     private isShuttingDown = false;
     private deviceManager: DeviceManager | null = null;
@@ -41,6 +46,7 @@ export class OPCUAServerManager {
 
             this.metrics.setStatus('running');
             this.startMetricsLogging();
+            this.startControlChannel();
             this.logger.info('Server listening (Ctrl+C to stop)');
             this.logger.info(
                 { port: endpoint?.port, endpoint: endpointUrl },
@@ -95,8 +101,38 @@ export class OPCUAServerManager {
         return this.metrics;
     }
 
+    /** The CLI <-> running-server control channel (#37). Exposed mainly for tests. */
+    getControlServer(): ControlServer {
+        return this.controlServer;
+    }
+
+    /**
+     * Registers the reference handlers/channels that back this issue's own
+     * acceptance criteria (a working request/response call and a working
+     * subscription) — not stand-ins for #38-40's actual `info`/`healthcheck`/`watch`
+     * commands, which register their own handlers on this same channel.
+     */
+    private startControlChannel(): void {
+        this.controlServer.registerHandler('ping', () => ({
+            pong: true,
+            uptimeMs: this.metrics.getStatus().uptimeMs,
+        }));
+
+        this.controlServer.start();
+
+        this.controlHeartbeatTimer = setInterval(() => {
+            this.controlServer.publish('heartbeat', { time: new Date().toISOString() });
+        }, CONTROL_HEARTBEAT_INTERVAL_MS);
+        this.controlHeartbeatTimer.unref();
+    }
+
     private cleanupResources(): void {
         this.stopMetricsLogging();
+        if (this.controlHeartbeatTimer) {
+            clearInterval(this.controlHeartbeatTimer);
+            this.controlHeartbeatTimer = null;
+        }
+        void this.controlServer.stop();
         this.configWatcher?.stop();
         this.logger.debug('Resource cleanup completed');
     }
