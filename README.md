@@ -69,7 +69,7 @@ Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shu
 
 ## CLI
 
-A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate` today, with more commands to come.
+A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info` today, with more commands to come (`healthcheck`, `watch`, `get`).
 
 ```bash
 opcua-server --help
@@ -119,7 +119,54 @@ Duplicate nodeId: 'ns=1;s=Dup'.
 
 ### Talking to an already-running server
 
-`start`/`validate` above are standalone — but commands that need to reach into a server that's *already running* from a separate CLI invocation (`reload`/`info`, `healthcheck`, `watch`/`get`) go through a dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
+`start`/`validate` above are standalone — but `reload`, `info`, and (soon) `healthcheck`/`watch`/`get` reach into a server that's *already running*, from a separate CLI invocation. They all go through one dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
+
+Both commands below accept `--port <number>` to target a server running on a non-default port (same resolution as `start`: flag > `PORT` env var > default `4840`).
+
+**`reload`** — triggers a device configuration reload on the running server (equivalent to editing `devices.json`, which hot-reload already does automatically — useful when you want to trigger it explicitly, e.g. from a script):
+
+```bash
+opcua-server reload
+```
+
+```
+✓ Configuration reloaded — 2 device(s) active.
+  Added:   PLC3
+  Removed: PLC-old
+```
+
+On failure (e.g. the current `devices.json` is invalid), it prints the server's structured error and exits with the matching `ExitCode` — `2` (`ConfigurationError`) in this example, not a generic failure code:
+
+```
+$ opcua-server reload
+DEVICE_CONFIG_INVALID
+
+Device configuration reload failed: the new configuration is invalid. Previous devices remain active.
+```
+
+**`info`** — displays current server status and statistics, backed by [`MetricsService`](src/metrics/metrics-service.ts) (#34):
+
+```bash
+opcua-server info
+```
+
+```
+OPC UA Server v1.1.0
+Status: running
+Devices: 12
+Tags: 450
+Sessions: 3
+Uptime: 4h 12m
+```
+
+Both exit with a categorized `ExitCode` (`SERVER_ERROR`, `6`) if no server is reachable on the target port — fast, not a hang:
+
+```
+$ opcua-server info
+SERVER_NOT_RUNNING
+
+No running OPC UA server was found on this machine for the configured port
+```
 
 ## Running with Docker
 
@@ -249,9 +296,14 @@ src/
 │   ├── bin.ts                   # `opcua-server` binary entry point
 │   ├── program.ts               # Builds the root Command; exitOverride -> ExitCode mapping
 │   ├── log-levels.ts            # Shared --log-level validation
+│   ├── target-port.ts           # Shared --port resolution/validation (start, reload, info)
+│   ├── format-uptime.ts         # uptimeMs -> "4h 12m" (CLI-layer formatting, per #34)
+│   ├── control-error.ts         # Shared control-channel failure reporting -> ExitCode
 │   └── commands/
 │       ├── start.ts             # opcua-server start
-│       └── validate.ts          # opcua-server validate <file>
+│       ├── validate.ts          # opcua-server validate <file>
+│       ├── reload.ts            # opcua-server reload
+│       └── info.ts              # opcua-server info
 ├── config/
 │   └── server-config.ts         # Reads env vars into OPCUAServer options
 ├── core/
