@@ -69,7 +69,7 @@ Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shu
 
 ## CLI
 
-A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info` today, with more commands to come (`healthcheck`, `watch`, `get`).
+A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck` today, with more commands to come (`watch`, `get`).
 
 ```bash
 opcua-server --help
@@ -119,9 +119,9 @@ Duplicate nodeId: 'ns=1;s=Dup'.
 
 ### Talking to an already-running server
 
-`start`/`validate` above are standalone — but `reload`, `info`, and (soon) `healthcheck`/`watch`/`get` reach into a server that's *already running*, from a separate CLI invocation. They all go through one dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
+`start`/`validate` above are standalone — but `reload`, `info`, `healthcheck`, and (soon) `watch`/`get` reach into a server that's *already running*, from a separate CLI invocation. They all go through one dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
 
-Both commands below accept `--port <number>` to target a server running on a non-default port (same resolution as `start`: flag > `PORT` env var > default `4840`).
+All three commands below accept `--port <number>` to target a server running on a non-default port (same resolution as `start`: flag > `PORT` env var > default `4840`).
 
 **`reload`** — triggers a device configuration reload on the running server (equivalent to editing `devices.json`, which hot-reload already does automatically — useful when you want to trigger it explicitly, e.g. from a script):
 
@@ -168,6 +168,29 @@ SERVER_NOT_RUNNING
 No running OPC UA server was found on this machine for the configured port
 ```
 
+**`healthcheck`** — a lightweight liveness check meant for orchestrators (Docker/Kubernetes) as well as manual debugging. Prints nothing by default; only the exit code matters:
+
+```bash
+opcua-server healthcheck
+echo $?   # 0 = healthy
+```
+
+It reuses the exact same control-channel `info` request as the `info` command above — no separate health signal to keep in sync. `status: 'running'` is the only healthy state; `starting`, `degraded`, `stopping`, and `stopped` all count as unhealthy (same line the `MetricsService`-derived `degraded` status draws — see "Runtime metrics" below):
+
+| Situation | Exit code | `ErrorCode` |
+| --- | --- | --- |
+| Reachable, `status: 'running'` | `0` | — |
+| Reachable, any other `status` | `6` (`ServerError`) | `SERVER_UNHEALTHY` |
+| Unreachable (no server on the target port) | `6` (`ServerError`) | `SERVER_NOT_RUNNING` |
+
+```bash
+opcua-server healthcheck --verbose         # also prints the same payload as `info`
+opcua-server healthcheck --timeout 2000    # bound the whole check tighter (default: 2000ms)
+opcua-server healthcheck --port 4880
+```
+
+The check itself is bounded by `--timeout` (`connect` and the `info` request each get their own budget, applied sequentially) so it can't hang a container's health check even against a completely unresponsive server.
+
 ## Running with Docker
 
 Build the image (multi-stage: installs full deps to run `tsc`, then a separate production-only `npm ci --omit=dev` layer for the final image):
@@ -196,7 +219,7 @@ docker run --rm -p 4840:48040 -v ./my-devices:/app/devices opcua-server
 
 ### Health check
 
-The image defines a `HEALTHCHECK` ([`scripts/docker-healthcheck.cjs`](scripts/docker-healthcheck.cjs)) that checks the configured port accepts a TCP connection — a lightweight, dependency-free liveness check (not a full OPC UA handshake). Check status with:
+The image defines a `HEALTHCHECK` that runs `opcua-server healthcheck` (#39) — it talks to the running server over the same control channel `info` uses, so "healthy" reflects real server status (`MetricsService`), not just "the port accepts a TCP connection". Check status with:
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' <container>
@@ -303,7 +326,8 @@ src/
 │       ├── start.ts             # opcua-server start
 │       ├── validate.ts          # opcua-server validate <file>
 │       ├── reload.ts            # opcua-server reload
-│       └── info.ts              # opcua-server info
+│       ├── info.ts              # opcua-server info
+│       └── healthcheck.ts       # opcua-server healthcheck
 ├── config/
 │   └── server-config.ts         # Reads env vars into OPCUAServer options
 ├── core/
@@ -327,9 +351,6 @@ src/
 │   └── package-info.ts           # getPackageVersion() (used by --version and runtime metrics)
 └── infrastructure/
     └── logger/                   # pino logger setup (console + logs/errors.log)
-
-scripts/
-└── docker-healthcheck.cjs        # Docker HEALTHCHECK: TCP-connect check (see above)
 
 docs/decisions/                   # Architecture decision records (e.g. the control channel transport choice)
 
