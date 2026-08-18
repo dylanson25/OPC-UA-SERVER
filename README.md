@@ -69,7 +69,7 @@ Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shu
 
 ## CLI
 
-A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck` today, with more commands to come (`watch`, `get`).
+A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck`/`watch`/`get`.
 
 ```bash
 opcua-server --help
@@ -119,9 +119,9 @@ Duplicate nodeId: 'ns=1;s=Dup'.
 
 ### Talking to an already-running server
 
-`start`/`validate` above are standalone — but `reload`, `info`, `healthcheck`, and (soon) `watch`/`get` reach into a server that's *already running*, from a separate CLI invocation. They all go through one dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
+`start`/`validate` above are standalone — but `reload`, `info`, `healthcheck`, `watch`, and `get` reach into a server that's *already running*, from a separate CLI invocation. They all go through one dedicated local control channel ([`src/control/`](src/control/)) rather than each inventing their own. It runs alongside the OPC UA endpoint automatically — nothing to configure. Design decision and rationale: [`docs/decisions/0001-cli-server-control-channel.md`](docs/decisions/0001-cli-server-control-channel.md).
 
-All three commands below accept `--port <number>` to target a server running on a non-default port (same resolution as `start`: flag > `PORT` env var > default `4840`).
+Every command below accepts `--port <number>` to target a server running on a non-default port (same resolution as `start`: flag > `PORT` env var > default `4840`).
 
 **`reload`** — triggers a device configuration reload on the running server (equivalent to editing `devices.json`, which hot-reload already does automatically — useful when you want to trigger it explicitly, e.g. from a script):
 
@@ -190,6 +190,64 @@ opcua-server healthcheck --port 4880
 ```
 
 The check itself is bounded by `--timeout` (`connect` and the `info` request each get their own budget, applied sequentially) so it can't hang a container's health check even against a completely unresponsive server.
+
+### Inspecting tag values: `watch` and `get`
+
+`watch` and `get` share one selector for picking which tag(s) to look at — exactly one of `--device`, `--node-id`, or `--browse-name`:
+
+| Flag | Selects |
+| --- | --- |
+| `--device <key>` | Every tag on that device (or a `--tags` subset — `get` only). |
+| `--node-id <id>` | The single tag with that exact NodeId. Can't combine with `--device`/`--browse-name`/`--tags`. |
+| `--browse-name <name>` | The tag(s) with that browse name. If more than one device has a tag with that name, add `--device` to disambiguate — that's the *only* combination `--browse-name` accepts. |
+| `--tags <a,b,c>` (`get` only) | A comma-separated browse-name subset, scoped to `--device` (requires it). |
+
+An invalid combination (e.g. `--node-id` with `--device`, or `--tags` without `--device`) is rejected immediately with `ExitCode.VALIDATION_ERROR` — no connection attempted. An ambiguous `--browse-name` with no `--device` is rejected too, listing every match instead of guessing:
+
+```
+$ opcua-server get --browse-name Temperature
+TAG_BROWSE_NAME_AMBIGUOUS
+
+Multiple tags named "Temperature" found — specify --device to disambiguate:
+  PLC1.Temperature (ns=1;s=PLC1.Temperature)
+  PLC2.Temperature (ns=1;s=PLC2.Temperature)
+```
+
+**`get`** — reads the **current** value of one or more tags once and exits. Backed by the same `tags.get` control-channel request `watch` resolves against, but reads the live value directly rather than waiting for a change — so it returns instantly even for a tag that never changes:
+
+```bash
+opcua-server get --device plc1
+opcua-server get --node-id "ns=2;s=PLC1.Temperature1"
+opcua-server get --browse-name Temperature1
+opcua-server get --device plc1 --tags Temperature1,Temperature2
+```
+
+```
+plc1.Temperature1        72.6
+plc1.Temperature2        68.1
+plc1.HomeSwitchStatus    true
+```
+
+**`watch`** — streams real-time tag value changes until you stop it with `Ctrl+C`:
+
+```bash
+opcua-server watch --device plc1
+opcua-server watch --node-id "ns=2;s=PLC1.Temperature1"
+opcua-server watch --browse-name Temperature1
+```
+
+```
+[12:04:31.201] plc1.Temperature1        72.4 → 72.6
+[12:04:31.980] plc1.HomeSwitchStatus    false → true
+```
+
+It opens a real subscription over the control channel (not a one-shot request) and, by default, only prints changes that pass the same `hasSignificantChange` deadband the server's own `debug`-level tag-change logs use (see `start`'s `--log-level` above) — one deadband check, shared by both, so `watch`'s output can never disagree with what the server itself considers "a change". Pass `--log-level trace` to see every update instead, matching `start --log-level trace`'s behavior:
+
+```bash
+opcua-server watch --device plc1 --log-level trace
+```
+
+`Ctrl+C` disconnects cleanly — the control channel's own socket-close handling (see [`src/control/control-server.ts`](src/control/control-server.ts)) tears down the subscription server-side, so no stray subscription is left running after `watch` exits.
 
 ## Running with Docker
 
@@ -307,7 +365,7 @@ All counters are updated incrementally as devices register/fail/get removed, tag
 
 `status` is `'starting' | 'running' | 'degraded' | 'stopping' | 'stopped'`. `degraded` is derived automatically (not set directly): the server reports `degraded` instead of `running` whenever at least one device is in `'error'` status, or when 5+ errors have been recorded within the last 5 minutes (both configurable via `MetricsService` constructor options). This is the signal a health check should treat as unhealthy alongside `stopping`/`stopped`/`starting`.
 
-Real-time tag value change notifications are intentionally **not** part of this service — that's a push/event concern for a future `watch`-style feature, not a pull-based snapshot.
+Real-time tag value change notifications are intentionally **not** part of this service — `MetricsService` stays pull-based. That push/event concern belongs to `TagRuntime` ([`src/tags/tag-runtime.ts`](src/tags/tag-runtime.ts)) instead, which is what backs `watch`/`get` (see above).
 
 ## Project structure
 
@@ -319,15 +377,19 @@ src/
 │   ├── bin.ts                   # `opcua-server` binary entry point
 │   ├── program.ts               # Builds the root Command; exitOverride -> ExitCode mapping
 │   ├── log-levels.ts            # Shared --log-level validation
-│   ├── target-port.ts           # Shared --port resolution/validation (start, reload, info)
+│   ├── target-port.ts           # Shared --port resolution/validation (start, reload, info, ...)
 │   ├── format-uptime.ts         # uptimeMs -> "4h 12m" (CLI-layer formatting, per #34)
+│   ├── format-value.ts          # Tag value -> display string, shared by watch/get
+│   ├── tag-selector.ts          # --device/--node-id/--browse-name/--tags validation, shared by watch/get
 │   ├── control-error.ts         # Shared control-channel failure reporting -> ExitCode
 │   └── commands/
 │       ├── start.ts             # opcua-server start
 │       ├── validate.ts          # opcua-server validate <file>
 │       ├── reload.ts            # opcua-server reload
 │       ├── info.ts              # opcua-server info
-│       └── healthcheck.ts       # opcua-server healthcheck
+│       ├── healthcheck.ts       # opcua-server healthcheck
+│       ├── watch.ts             # opcua-server watch
+│       └── get.ts               # opcua-server get
 ├── config/
 │   └── server-config.ts         # Reads env vars into OPCUAServer options
 ├── core/
@@ -337,10 +399,12 @@ src/
 │   ├── config-reader.ts          # Reads + validates devices.json
 │   ├── config-watcher.ts         # Watches devices.json and triggers hot reload
 │   ├── device-factory.ts         # Creates an OPC UA object node for a device
-│   └── device-manager.ts         # Registers/removes/reloads devices in the address space
+│   ├── device-manager.ts         # Registers/removes/reloads devices in the address space
+│   └── resolve-tags.ts           # watch/get selector resolution against the device list (#40)
 ├── tags/
 │   ├── factory.ts                # Dispatches tag creation by type
-│   └── primitive.ts               # Creates a variable node with change-logging
+│   ├── primitive.ts              # Creates a variable node with change-logging
+│   └── tag-runtime.ts            # Live tag registry + change-event stream behind watch/get (#40)
 ├── schemas/                      # zod schemas for devices/tags
 ├── errors/                       # AppError hierarchy, ErrorCode, ExitCode, logAppError
 ├── metrics/                      # MetricsService, ServerStatus/DeviceStatus types
