@@ -41,7 +41,8 @@ export function registerInfoCommand(program: Command): void {
         });
 }
 
-function printInfo(info: InfoResult): void {
+/** Exported so `healthcheck` (#39) can print the identical payload for `--verbose`. */
+export function printInfo(info: InfoResult): void {
     console.log(`OPC UA Server v${info.version}`);
     console.log(`Status: ${info.status}`);
     console.log(`Devices: ${info.devices}`);
