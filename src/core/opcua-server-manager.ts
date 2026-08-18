@@ -6,7 +6,9 @@ import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { ConfigurationError, ErrorCode, RuntimeError, ServerError, logAppError } from '../errors/index.ts';
 import { MetricsService } from '../metrics/index.ts';
 import { ControlServer, getControlSocketPath } from '../control/index.ts';
-import type { ReloadResult, InfoResult } from '../control/index.ts';
+import type { ReloadResult, InfoResult, ResolvedTag, TagSelector, TagValue } from '../control/index.ts';
+import { TagRuntime } from '../tags/tag-runtime.ts';
+import { resolveTagSelector } from '../devices/resolve-tags.ts';
 import type { SessionLike } from '../types/index.ts';
 
 const CONTROL_HEARTBEAT_INTERVAL_MS = 5000;
@@ -15,6 +17,7 @@ export class OPCUAServerManager {
     private readonly logger = createModuleLogger('server');
     private readonly server: OPCUAServer;
     private readonly metrics = new MetricsService();
+    private readonly tagRuntime = new TagRuntime();
     private readonly controlServer = new ControlServer(getControlSocketPath(serverOptions.port));
     private readonly metricsLogIntervalMs = Number(process.env.METRICS_LOG_INTERVAL_MS) || 0;
     private metricsLogTimer: NodeJS.Timeout | null = null;
@@ -107,11 +110,17 @@ export class OPCUAServerManager {
         return this.controlServer;
     }
 
+    /** The live tag registry/change-stream behind `watch`/`get` (#40). Exposed for tests. */
+    getTagRuntime(): TagRuntime {
+        return this.tagRuntime;
+    }
+
     /**
      * Registers every request handler the control channel (#37) currently serves —
-     * the `ping`/`heartbeat` reference pair from #37 itself, plus the real `reload`
-     * and `info` commands (#38). #39/#40 register their own handlers here the same
-     * way rather than opening a separate channel.
+     * the `ping`/`heartbeat` reference pair from #37 itself, `reload`/`info` (#38), and
+     * `tags.resolve`/`tags.get` plus the `tag-updates` event channel (#40). Future
+     * commands register their own handlers here the same way rather than opening a
+     * separate channel.
      */
     private startControlChannel(): void {
         this.controlServer.registerHandler('ping', () => ({
@@ -121,6 +130,13 @@ export class OPCUAServerManager {
 
         this.controlServer.registerHandler('reload', () => this.handleReloadRequest());
         this.controlServer.registerHandler('info', () => this.handleInfoRequest());
+        this.controlServer.registerHandler('tags.resolve', (payload) => this.handleTagsResolve(payload));
+        this.controlServer.registerHandler('tags.get', (payload) => this.handleTagsGet(payload));
+
+        // Every tag write (significant or not) republished for `watch` (#40) to filter
+        // client-side by nodeId/significance — no-ops via ControlServer.publish() when
+        // nobody's subscribed to 'tag-updates'.
+        this.tagRuntime.onChange((change) => this.controlServer.publish('tag-updates', change));
 
         this.controlServer.start();
 
@@ -160,6 +176,23 @@ export class OPCUAServerManager {
             added: [...after].filter((key) => !before.has(key)),
             removed: [...before].filter((key) => !after.has(key)),
         };
+    }
+
+    private handleTagsResolve(payload: unknown): ResolvedTag[] {
+        const deviceManager = this.deviceManager;
+        if (!deviceManager) {
+            // Unreachable in practice — same reasoning as handleReloadRequest() above.
+            throw new RuntimeError(ErrorCode.UNKNOWN_ERROR, 'Device manager not initialized');
+        }
+
+        return resolveTagSelector(deviceManager.list(), payload as TagSelector);
+    }
+
+    private handleTagsGet(payload: unknown): TagValue[] {
+        return this.handleTagsResolve(payload).map((tag) => ({
+            ...tag,
+            value: this.tagRuntime.getValue(tag.nodeId),
+        }));
     }
 
     private handleInfoRequest(): InfoResult {
@@ -206,7 +239,7 @@ export class OPCUAServerManager {
         const addressSpace = this.server.engine.addressSpace;
         const namespace = addressSpace.getOwnNamespace();
 
-        this.deviceManager = new DeviceManager(addressSpace, namespace, this.metrics);
+        this.deviceManager = new DeviceManager(addressSpace, namespace, this.metrics, this.tagRuntime);
         this.deviceManager.load();
 
         this.configWatcher = new ConfigWatcher(this.deviceManager);
