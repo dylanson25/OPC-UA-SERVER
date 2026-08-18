@@ -33,12 +33,15 @@ COPY --from=build /app/dist ./dist
 # Baked-in default device config; overridden by mounting a volume at /app/devices
 # (see README) — findDevicesDirectory() checks /app/devices before this fallback.
 COPY src/devices/devices.json ./dist/devices/devices.json
-COPY scripts/docker-healthcheck.cjs ./scripts/docker-healthcheck.cjs
 
 EXPOSE 48040
 
+# opcua-server healthcheck (#39) talks to the running server over its control channel
+# (#37) and reuses the same status the `info` command reports — a real liveness check,
+# not just "is the port open". PORT is already set via ENV above, so it targets the
+# right control-channel socket without needing an explicit --port here.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD node scripts/docker-healthcheck.cjs
+    CMD node dist/cli/bin.js healthcheck
 
 # Exec form (not shell form): Node runs as PID 1 and receives SIGTERM directly from
 # `docker stop`, which src/index.ts's graceful-shutdown handler depends on.

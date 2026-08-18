@@ -1,5 +1,8 @@
 import net from 'node:net';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { ExitCode } from '../../src/errors/index.ts';
+import { mockProcessExit, silenceCommanderOutput, ProcessExitSignal } from '../cli/process-exit-helper.ts';
 
 /**
  * Real server, real control channel, no mocks — mirrors the setup in
@@ -25,6 +28,12 @@ describe('OPCUAServerManager control channel integration', () => {
     let OPCUAServerManager: typeof import('../../src/core/opcua-server-manager.ts').OPCUAServerManager;
     let ControlClient: typeof import('../../src/control/index.ts').ControlClient;
     let getControlSocketPath: typeof import('../../src/control/index.ts').getControlSocketPath;
+    // Imported dynamically (like the two above), rather than statically at the top of
+    // this file, for the same reason: src/cli/program.ts transitively pulls in
+    // src/control/index.ts -> the shared pino logger singleton, which fixes its level
+    // from process.env at first import. A static import here would create that
+    // singleton before beforeAll sets LOG_LEVEL='silent' below.
+    let createProgram: typeof import('../../src/cli/program.ts').createProgram;
     let manager: InstanceType<typeof OPCUAServerManager>;
     let port: number;
     let hasShutDown = false;
@@ -37,6 +46,7 @@ describe('OPCUAServerManager control channel integration', () => {
 
         ({ OPCUAServerManager } = await import('../../src/core/opcua-server-manager.ts'));
         ({ ControlClient, getControlSocketPath } = await import('../../src/control/index.ts'));
+        ({ createProgram } = await import('../../src/cli/program.ts'));
 
         manager = new OPCUAServerManager();
         manager.initialize();
@@ -130,6 +140,50 @@ describe('OPCUAServerManager control channel integration', () => {
         client.disconnect();
     });
 
+    it('opcua-server healthcheck exits ExitCode.SUCCESS while the server is healthy', async () => {
+        const exitSpy = mockProcessExit();
+        try {
+            const program = createProgram();
+            silenceCommanderOutput(program);
+
+            await expect(
+                program.parseAsync(['healthcheck', '--port', String(port)], { from: 'user' }),
+            ).rejects.toBeInstanceOf(ProcessExitSignal);
+
+            expect(exitSpy).toHaveBeenNthCalledWith(1, ExitCode.SUCCESS);
+        } finally {
+            exitSpy.mockRestore();
+        }
+    });
+
+    it('opcua-server healthcheck exits a categorized non-zero code once the server is reachable but degraded', async () => {
+        // Forces a real 'degraded' status the same way MetricsService derives it on its
+        // own (5+ errors within the window) — not mocked, so this exercises the exact
+        // "unhealthy but reachable" state #34's degraded-status derivation and #39's
+        // healthcheck both rely on, distinguishing it from "unreachable" below.
+        for (let i = 0; i < 5; i++) {
+            manager.getMetrics().recordError('DeviceError');
+        }
+
+        const exitSpy = mockProcessExit();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const program = createProgram();
+            silenceCommanderOutput(program);
+
+            await expect(
+                program.parseAsync(['healthcheck', '--port', String(port)], { from: 'user' }),
+            ).rejects.toBeInstanceOf(ProcessExitSignal);
+
+            expect(exitSpy).toHaveBeenNthCalledWith(1, ExitCode.SERVER_ERROR);
+            const output = errorSpy.mock.calls.map((call) => call[0]).join('\n');
+            expect(output).toContain('SERVER_UNHEALTHY');
+        } finally {
+            exitSpy.mockRestore();
+            errorSpy.mockRestore();
+        }
+    });
+
     it('is unreachable after shutdown', async () => {
         hasShutDown = true;
         await new Promise<void>((resolve) => manager.shutdown(() => resolve()));
@@ -140,4 +194,26 @@ describe('OPCUAServerManager control channel integration', () => {
         await expect(client.connect(2000)).rejects.toMatchObject({ code: 'SERVER_NOT_RUNNING' });
         expect(Date.now() - start).toBeLessThan(1000);
     }, 15_000);
+
+    it('opcua-server healthcheck exits a categorized non-zero code once the server is unreachable', async () => {
+        const exitSpy = mockProcessExit();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const start = Date.now();
+        try {
+            const program = createProgram();
+            silenceCommanderOutput(program);
+
+            await expect(
+                program.parseAsync(['healthcheck', '--port', String(port)], { from: 'user' }),
+            ).rejects.toBeInstanceOf(ProcessExitSignal);
+
+            expect(exitSpy).toHaveBeenNthCalledWith(1, ExitCode.SERVER_ERROR);
+            expect(Date.now() - start).toBeLessThan(3000);
+            const output = errorSpy.mock.calls.map((call) => call[0]).join('\n');
+            expect(output).toContain('SERVER_NOT_RUNNING');
+        } finally {
+            exitSpy.mockRestore();
+            errorSpy.mockRestore();
+        }
+    });
 });
