@@ -1,4 +1,4 @@
 export type { AddressSpaceLike, NamespaceLike } from './opcua.ts';
 export type { PrimitiveTagParams, CreateTagParams } from './tag.ts';
 export type { ServerOptions, ServerBuildInfo, SessionLike } from './server.ts';
-export type { DeviceConfig, TagConfig } from './device.ts';
+export type { DeviceConfig, TagConfig, TagType } from './device.ts';

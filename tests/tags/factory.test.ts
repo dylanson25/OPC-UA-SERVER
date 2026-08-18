@@ -165,6 +165,23 @@ describe('createTag', () => {
 
             expect(mockedAddPrimitiveTag.mock.calls[0][0].changeThreshold).toBeUndefined();
         });
+
+        it('forwards tagType (from config.type), deviceKey, and tagRuntime through to addPrimitiveTag (#40)', () => {
+            const tagRuntime = { register: vi.fn(), recordChange: vi.fn() } as any;
+
+            createTag({
+                namespace: fakeNamespace,
+                device: fakeDevice,
+                config: { type: 'integer', browseName: 'Count', nodeId: 'ns=1;s=Count' },
+                deviceKey: 'device1',
+                tagRuntime,
+            });
+
+            const callArgs = mockedAddPrimitiveTag.mock.calls[0][0];
+            expect(callArgs.tagType).toBe('integer');
+            expect(callArgs.deviceKey).toBe('device1');
+            expect(callArgs.tagRuntime).toBe(tagRuntime);
+        });
     });
 
     describe('float type', () => {

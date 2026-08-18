@@ -17,9 +17,28 @@ export function addPrimitiveTag({
     valueType,
     parser,
     label,
-    changeThreshold = 0.01
+    changeThreshold = 0.01,
+    tagType,
+    deviceKey,
+    tagRuntime,
 }: PrimitiveTagParams): void {
     let currentValue = initialValue;
+    const deviceLabel = device.browseName.toString();
+
+    // Only registers when the caller passed everything needed to identify this tag on
+    // the wire (#40's --device selector needs a real key, not just the OPC UA device
+    // object's browseName) — every other caller (including all existing tests) simply
+    // doesn't get a watch/get-able tag, exactly as before this feature existed.
+    if (tagRuntime && tagType && deviceKey) {
+        tagRuntime.register({
+            device: deviceKey,
+            deviceName: deviceLabel,
+            browseName,
+            nodeId,
+            type: tagType,
+            value: currentValue,
+        });
+    }
 
     namespace.addVariable({
         componentOf: device,
@@ -41,7 +60,7 @@ export function addPrimitiveTag({
                 // changeThreshold deadband below is filtering out updates you expect to see.
                 logger.trace(
                     {
-                        device: device.browseName.toString(),
+                        device: deviceLabel,
                         nodeId: nodeId.toString(),
                         browseName,
                         oldValue: currentValue,
@@ -50,10 +69,15 @@ export function addPrimitiveTag({
                     `${label} tag value updated`,
                 );
 
-                if (hasSignificantChange(currentValue, newValue, changeThreshold)) {
+                // Computed once — feeds both the debug-log deadband below and the
+                // `tag-updates` stream (#40), so `watch`'s default filtered view can never
+                // disagree with what the server's own logs consider "a change worth noting".
+                const significant = hasSignificantChange(currentValue, newValue, changeThreshold);
+
+                if (significant) {
                     logger.debug(
                         {
-                            device: device.browseName.toString(),
+                            device: deviceLabel,
                             nodeId: nodeId.toString(),
                             browseName,
                             oldValue: currentValue,
@@ -61,6 +85,20 @@ export function addPrimitiveTag({
                         },
                         `${label} tag changed`,
                     );
+                }
+
+                if (tagRuntime && tagType && deviceKey) {
+                    tagRuntime.recordChange({
+                        device: deviceKey,
+                        deviceName: deviceLabel,
+                        browseName,
+                        nodeId,
+                        type: tagType,
+                        oldValue: currentValue,
+                        newValue,
+                        significant,
+                        timestamp: new Date().toISOString(),
+                    });
                 }
 
                 currentValue = newValue;

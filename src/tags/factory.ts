@@ -7,7 +7,7 @@ import type { CreateTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
 
-export function createTag({ namespace, device, config, metrics }: CreateTagParams): void {
+export function createTag({ namespace, device, config, metrics, deviceKey, tagRuntime }: CreateTagParams): void {
   switch (config.type) {
     case 'boolean':
       addPrimitiveTag({
@@ -20,6 +20,9 @@ export function createTag({ namespace, device, config, metrics }: CreateTagParam
         valueType: opcua.DataType.Boolean,
         parser: (value) => Boolean(value ?? false),
         label: 'Boolean',
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
       metrics?.recordTagCreated('boolean');
       return;
@@ -34,7 +37,10 @@ export function createTag({ namespace, device, config, metrics }: CreateTagParam
         valueType: opcua.DataType.Int32,
         parser: (value) => Number.parseInt(String(value ?? 0), 10),
         label: 'Integer',
-        changeThreshold: config.threshold
+        changeThreshold: config.threshold,
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
       metrics?.recordTagCreated('integer');
       return;
@@ -49,7 +55,10 @@ export function createTag({ namespace, device, config, metrics }: CreateTagParam
         valueType: opcua.DataType.Float,
         parser: (value) => Number(value ?? 0),
         label: 'Float',
-        changeThreshold: config.threshold
+        changeThreshold: config.threshold,
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
       metrics?.recordTagCreated('float');
       return;
@@ -64,7 +73,10 @@ export function createTag({ namespace, device, config, metrics }: CreateTagParam
         valueType: opcua.DataType.Double,
         parser: (value) => Number(value ?? 0),
         label: 'Double',
-        changeThreshold: config.threshold
+        changeThreshold: config.threshold,
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
       metrics?.recordTagCreated('double');
       return;
@@ -79,6 +91,9 @@ export function createTag({ namespace, device, config, metrics }: CreateTagParam
         valueType: opcua.DataType.String,
         parser: (value) => String(value ?? ''),
         label: 'String',
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
       metrics?.recordTagCreated('string');
       return;
@@ -96,6 +111,9 @@ export function createTag({ namespace, device, config, metrics }: CreateTagParam
         parser: (value) =>
           new Date(value instanceof Date ? value : String(value ?? new Date())),
         label: 'DateTime',
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
       metrics?.recordTagCreated('dateTime');
       return;
