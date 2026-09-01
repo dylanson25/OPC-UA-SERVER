@@ -10,4 +10,6 @@ export type LogModule =
     | 'session'
     | 'subscription'
     | 'security'
-    | 'address-space';
+    | 'address-space'
+    | 'metrics'
+    | 'control';

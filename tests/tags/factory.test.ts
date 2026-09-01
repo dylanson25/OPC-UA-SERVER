@@ -165,6 +165,23 @@ describe('createTag', () => {
 
             expect(mockedAddPrimitiveTag.mock.calls[0][0].changeThreshold).toBeUndefined();
         });
+
+        it('forwards tagType (from config.type), deviceKey, and tagRuntime through to addPrimitiveTag (#40)', () => {
+            const tagRuntime = { register: vi.fn(), recordChange: vi.fn() } as any;
+
+            createTag({
+                namespace: fakeNamespace,
+                device: fakeDevice,
+                config: { type: 'integer', browseName: 'Count', nodeId: 'ns=1;s=Count' },
+                deviceKey: 'device1',
+                tagRuntime,
+            });
+
+            const callArgs = mockedAddPrimitiveTag.mock.calls[0][0];
+            expect(callArgs.tagType).toBe('integer');
+            expect(callArgs.deviceKey).toBe('device1');
+            expect(callArgs.tagRuntime).toBe(tagRuntime);
+        });
     });
 
     describe('float type', () => {
@@ -382,6 +399,51 @@ describe('createTag', () => {
             expect(payload.code).toBe(ErrorCode.TAG_TYPE_NOT_SUPPORTED);
             expect(payload.category).toBe('TagError');
             expect(payload.context).toEqual({ tagType: 'unknownType', browseName: 'Weird' });
+        });
+    });
+
+    describe('metrics integration', () => {
+        const makeFakeMetrics = () => ({
+            recordTagCreated: vi.fn(),
+            recordError: vi.fn(),
+        }) as any;
+
+        it('records a tag by type for each supported tag type', () => {
+            const metrics = makeFakeMetrics();
+
+            createTag({
+                namespace: fakeNamespace,
+                device: fakeDevice,
+                config: { type: 'boolean', browseName: 'Running', nodeId: 'ns=1;s=Running' },
+                metrics,
+            });
+
+            expect(metrics.recordTagCreated).toHaveBeenCalledWith('boolean');
+            expect(metrics.recordError).not.toHaveBeenCalled();
+        });
+
+        it('records a TagError instead of a tag for an unsupported type', () => {
+            const metrics = makeFakeMetrics();
+
+            createTag({
+                namespace: fakeNamespace,
+                device: fakeDevice,
+                config: { type: 'unknownType', browseName: 'Weird' } as any,
+                metrics,
+            });
+
+            expect(metrics.recordError).toHaveBeenCalledWith('TagError');
+            expect(metrics.recordTagCreated).not.toHaveBeenCalled();
+        });
+
+        it('does not throw when no metrics service is provided', () => {
+            expect(() =>
+                createTag({
+                    namespace: fakeNamespace,
+                    device: fakeDevice,
+                    config: { type: 'boolean', browseName: 'Running', nodeId: 'ns=1;s=Running' },
+                }),
+            ).not.toThrow();
         });
     });
 });

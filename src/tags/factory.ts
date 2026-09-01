@@ -7,7 +7,7 @@ import type { CreateTagParams } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
 
-export function createTag({ namespace, device, config }: CreateTagParams): void {
+export function createTag({ namespace, device, config, metrics, deviceKey, tagRuntime }: CreateTagParams): void {
   switch (config.type) {
     case 'boolean':
       addPrimitiveTag({
@@ -20,7 +20,11 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Boolean,
         parser: (value) => Boolean(value ?? false),
         label: 'Boolean',
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
+      metrics?.recordTagCreated('boolean');
       return;
     case 'integer':
       addPrimitiveTag({
@@ -33,8 +37,12 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Int32,
         parser: (value) => Number.parseInt(String(value ?? 0), 10),
         label: 'Integer',
-        changeThreshold: config.threshold
+        changeThreshold: config.threshold,
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
+      metrics?.recordTagCreated('integer');
       return;
     case 'float':
       addPrimitiveTag({
@@ -47,8 +55,12 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Float,
         parser: (value) => Number(value ?? 0),
         label: 'Float',
-        changeThreshold: config.threshold
+        changeThreshold: config.threshold,
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
+      metrics?.recordTagCreated('float');
       return;
     case 'double':
       addPrimitiveTag({
@@ -61,8 +73,12 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.Double,
         parser: (value) => Number(value ?? 0),
         label: 'Double',
-        changeThreshold: config.threshold
+        changeThreshold: config.threshold,
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
+      metrics?.recordTagCreated('double');
       return;
     case 'string':
       addPrimitiveTag({
@@ -75,7 +91,11 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         valueType: opcua.DataType.String,
         parser: (value) => String(value ?? ''),
         label: 'String',
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
+      metrics?.recordTagCreated('string');
       return;
     case 'dateTime':
       addPrimitiveTag({
@@ -91,7 +111,11 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
         parser: (value) =>
           new Date(value instanceof Date ? value : String(value ?? new Date())),
         label: 'DateTime',
+        tagType: config.type,
+        deviceKey,
+        tagRuntime,
       });
+      metrics?.recordTagCreated('dateTime');
       return;
     default: {
       const unsupported = config as { type?: unknown; browseName?: string };
@@ -103,6 +127,7 @@ export function createTag({ namespace, device, config }: CreateTagParams): void 
           { tagType: unsupported.type, browseName: unsupported.browseName },
         ),
       );
+      metrics?.recordError('TagError');
       return;
     }
   }

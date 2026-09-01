@@ -26,5 +26,16 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Standalone CommonJS scripts (e.g. the Docker health check) run directly by
+    // Node with no build step, so they intentionally use require(), not import.
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
   eslintConfigPrettier,
 );

@@ -37,19 +37,28 @@ const makeConfig = (name: string, overrides = {}): DeviceConfig => ({
     ...overrides,
 });
 
+function makeFakeMetrics() {
+    return {
+        recordDeviceConnected: vi.fn(),
+        recordDeviceError: vi.fn(),
+        recordDeviceRemoved: vi.fn(),
+        recordError: vi.fn(),
+    } as any;
+}
+
 beforeEach(() => {
     vi.clearAllMocks();
 });
 
 describe('DeviceManager', () => {
     describe('register', () => {
-        it('calls createDevice with namespace and config', () => {
+        it('calls createDevice with namespace, config, metrics, tagRuntime, and the device key', () => {
             const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
             const config = makeConfig('Motor1');
 
             manager.register('device1', config);
 
-            expect(mockedCreateDevice).toHaveBeenCalledWith(fakeNamespace, config);
+            expect(mockedCreateDevice).toHaveBeenCalledWith(fakeNamespace, config, undefined, undefined, 'device1');
         });
 
         it('adds the device to the internal registry, visible via list()', () => {
@@ -256,6 +265,89 @@ describe('DeviceManager', () => {
 
             expect(result).toBe(true);
             expect(manager.list()).toEqual([]);
+        });
+    });
+
+    describe('metrics integration', () => {
+        it('records a connected device on successful registration', () => {
+            const metrics = makeFakeMetrics();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, metrics);
+            const config = makeConfig('Motor1');
+
+            manager.register('device1', config);
+
+            expect(metrics.recordDeviceConnected).toHaveBeenCalledWith('device1', 'Motor1');
+            expect(metrics.recordDeviceError).not.toHaveBeenCalled();
+        });
+
+        it('records a device error and a DeviceError when createDevice throws', () => {
+            mockedCreateDevice.mockImplementationOnce(() => {
+                throw new Error('node-opcua failed to create object');
+            });
+            const metrics = makeFakeMetrics();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, metrics);
+            const config = makeConfig('Motor1');
+
+            manager.register('device1', config);
+
+            expect(metrics.recordDeviceError).toHaveBeenCalledWith('device1', 'Motor1');
+            expect(metrics.recordError).toHaveBeenCalledWith('DeviceError');
+            expect(metrics.recordDeviceConnected).not.toHaveBeenCalled();
+        });
+
+        it('records a removed device on successful remove()', () => {
+            mockedCreateDevice.mockReturnValueOnce({ browseName: 'Motor1' } as any);
+            const metrics = makeFakeMetrics();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, metrics);
+            manager.register('device1', makeConfig('Motor1'));
+
+            manager.remove('device1');
+
+            expect(metrics.recordDeviceRemoved).toHaveBeenCalledWith('device1');
+        });
+
+        it('does not throw when no metrics service is provided', () => {
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+
+            expect(() => manager.register('device1', makeConfig('Motor1'))).not.toThrow();
+        });
+    });
+
+    describe('tagRuntime integration (#40)', () => {
+        const makeFakeTagRuntime = () =>
+            ({
+                register: vi.fn(),
+                unregisterDevice: vi.fn(),
+                getValue: vi.fn(),
+            }) as any;
+
+        it('passes the tagRuntime through to createDevice on register()', () => {
+            const tagRuntime = makeFakeTagRuntime();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, undefined, tagRuntime);
+            const config = makeConfig('Motor1');
+
+            manager.register('device1', config);
+
+            expect(mockedCreateDevice).toHaveBeenCalledWith(fakeNamespace, config, undefined, tagRuntime, 'device1');
+        });
+
+        it('unregisters the device key from tagRuntime on successful remove()', () => {
+            mockedCreateDevice.mockReturnValueOnce({ browseName: 'Motor1' } as any);
+            const tagRuntime = makeFakeTagRuntime();
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace, undefined, tagRuntime);
+            manager.register('device1', makeConfig('Motor1'));
+
+            manager.remove('device1');
+
+            expect(tagRuntime.unregisterDevice).toHaveBeenCalledWith('device1');
+        });
+
+        it('does not throw when no tagRuntime is provided', () => {
+            mockedCreateDevice.mockReturnValueOnce({ browseName: 'Motor1' } as any);
+            const manager = new DeviceManager(fakeAddressSpace, fakeNamespace);
+            manager.register('device1', makeConfig('Motor1'));
+
+            expect(() => manager.remove('device1')).not.toThrow();
         });
     });
 });
