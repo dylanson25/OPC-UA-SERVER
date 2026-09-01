@@ -358,4 +358,132 @@ describe('addPrimitiveTag', () => {
             expect(mockedLogger.trace).toHaveBeenCalledTimes(3);
         });
     });
+
+    describe('tagRuntime integration (#40)', () => {
+        function makeFakeTagRuntime() {
+            return { register: vi.fn(), recordChange: vi.fn() };
+        }
+
+        it('does nothing when tagRuntime is not provided (unchanged default behavior)', () => {
+            const { namespace, getOptions } = makeFakeNamespace();
+            const device = makeFakeDevice();
+
+            expect(() =>
+                addPrimitiveTag({
+                    namespace,
+                    device,
+                    nodeId: 'ns=1;s=Temp',
+                    browseName: 'Temperature',
+                    initialValue: 20,
+                    dataType: 'Double',
+                    valueType: opcua.DataType.Double,
+                    parser: (v) => Number(v),
+                    label: 'Temperature',
+                }),
+            ).not.toThrow();
+
+            expect(() => getOptions().value.set({ value: 25 })).not.toThrow();
+        });
+
+        it('registers the tag on creation with its initial value when tagRuntime + tagType + deviceKey are all given', () => {
+            const { namespace, getOptions } = makeFakeNamespace();
+            const device = makeFakeDevice('Motor1');
+            const tagRuntime = makeFakeTagRuntime();
+
+            addPrimitiveTag({
+                namespace,
+                device,
+                nodeId: 'ns=1;s=Temp',
+                browseName: 'Temperature',
+                initialValue: 20,
+                dataType: 'Double',
+                valueType: opcua.DataType.Double,
+                parser: (v) => Number(v),
+                label: 'Temperature',
+                tagType: 'float',
+                deviceKey: 'device1',
+                tagRuntime: tagRuntime as any,
+            });
+
+            expect(tagRuntime.register).toHaveBeenCalledWith({
+                device: 'device1',
+                deviceName: 'Motor1',
+                browseName: 'Temperature',
+                nodeId: 'ns=1;s=Temp',
+                type: 'float',
+                value: 20,
+            });
+            expect(getOptions()).toBeTruthy();
+        });
+
+        it('does not register when deviceKey is missing, even with tagRuntime + tagType given', () => {
+            const { namespace } = makeFakeNamespace();
+            const device = makeFakeDevice();
+            const tagRuntime = makeFakeTagRuntime();
+
+            addPrimitiveTag({
+                namespace,
+                device,
+                nodeId: 'ns=1;s=Temp',
+                browseName: 'Temperature',
+                initialValue: 20,
+                dataType: 'Double',
+                valueType: opcua.DataType.Double,
+                parser: (v) => Number(v),
+                label: 'Temperature',
+                tagType: 'float',
+                tagRuntime: tagRuntime as any,
+            });
+
+            expect(tagRuntime.register).not.toHaveBeenCalled();
+        });
+
+        it('records every set() as a change event, tagging significant vs insignificant correctly', () => {
+            const { namespace, getOptions } = makeFakeNamespace();
+            const device = makeFakeDevice('Motor1');
+            const tagRuntime = makeFakeTagRuntime();
+
+            addPrimitiveTag({
+                namespace,
+                device,
+                nodeId: 'ns=1;s=Temp',
+                browseName: 'Temperature',
+                initialValue: 20,
+                dataType: 'Double',
+                valueType: opcua.DataType.Double,
+                parser: (v) => Number(v),
+                label: 'Temperature',
+                changeThreshold: 5,
+                tagType: 'float',
+                deviceKey: 'device1',
+                tagRuntime: tagRuntime as any,
+            });
+
+            const { set } = getOptions().value;
+
+            set({ value: 20.1 }); // within threshold — insignificant, still recorded
+            set({ value: 30 }); // outside threshold — significant
+
+            expect(tagRuntime.recordChange).toHaveBeenCalledTimes(2);
+
+            const [firstCall, secondCall] = tagRuntime.recordChange.mock.calls;
+            expect(firstCall[0]).toMatchObject({
+                device: 'device1',
+                deviceName: 'Motor1',
+                browseName: 'Temperature',
+                nodeId: 'ns=1;s=Temp',
+                type: 'float',
+                oldValue: 20,
+                newValue: 20.1,
+                significant: false,
+            });
+            expect(typeof firstCall[0].timestamp).toBe('string');
+
+            expect(secondCall[0]).toMatchObject({
+                oldValue: 20.1,
+                newValue: 30,
+                significant: true,
+            });
+        });
+    });
 });

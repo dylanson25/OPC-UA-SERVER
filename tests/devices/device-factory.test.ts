@@ -95,6 +95,29 @@ describe('createDevice', () => {
         });
     });
 
+    it('forwards tagRuntime and deviceKey through to createTag (#40)', () => {
+        const fakeDeviceObject = { browseName: 'Motor1' };
+        const namespace = makeFakeNamespace(fakeDeviceObject);
+        const tag1 = validTag({ browseName: 'Tag1', nodeId: 'ns=1;s=Tag1' });
+        const tagRuntime = { register: vi.fn() } as any;
+        const config: DeviceConfig = {
+            name: 'Motor1',
+            nodeId: 'ns=1;s=Motor1',
+            tags: [tag1],
+        };
+
+        createDevice(namespace, config, undefined, tagRuntime, 'device1');
+
+        expect(mockedCreateTag).toHaveBeenCalledWith({
+            namespace,
+            device: fakeDeviceObject,
+            config: tag1,
+            metrics: undefined,
+            tagRuntime,
+            deviceKey: 'device1',
+        });
+    });
+
     it('does not call createTag when tags array is empty', () => {
         const namespace = makeFakeNamespace();
         const config: DeviceConfig = {

@@ -3,4 +3,4 @@ export { ControlClient } from './control-client.ts';
 export { getControlSocketPath } from './socket-path.ts';
 export { RemoteControlError } from './protocol.ts';
 export type { ClientMessage, ServerMessage, ControlErrorPayload } from './protocol.ts';
-export type { ReloadResult, InfoResult } from './messages.ts';
+export type { ReloadResult, InfoResult, TagSelector, ResolvedTag, TagValue, TagChangeEvent } from './messages.ts';

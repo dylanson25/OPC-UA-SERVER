@@ -7,6 +7,8 @@ import { registerValidateCommand } from './commands/validate.ts';
 import { registerReloadCommand } from './commands/reload.ts';
 import { registerInfoCommand } from './commands/info.ts';
 import { registerHealthcheckCommand } from './commands/healthcheck.ts';
+import { registerWatchCommand } from './commands/watch.ts';
+import { registerGetCommand } from './commands/get.ts';
 
 /**
  * Builds the root `opcua-server` Command — exported (not just executed) so tests can
@@ -30,6 +32,8 @@ export function createProgram(): Command {
                 '  $ opcua-server reload',
                 '  $ opcua-server info',
                 '  $ opcua-server healthcheck',
+                '  $ opcua-server watch --device plc1',
+                '  $ opcua-server get --device plc1',
                 '  $ opcua-server --version',
                 '',
             ].join('\n'),
@@ -53,6 +57,8 @@ export function createProgram(): Command {
     registerReloadCommand(program);
     registerInfoCommand(program);
     registerHealthcheckCommand(program);
+    registerWatchCommand(program);
+    registerGetCommand(program);
 
     return program;
 }

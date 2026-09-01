@@ -3,6 +3,7 @@ import { readDevicesConfig } from './config-reader.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { DeviceError, ErrorCode, logAppError } from '../errors/index.ts';
 import type { MetricsService } from '../metrics/index.ts';
+import type { TagRuntime } from '../tags/tag-runtime.ts';
 import type { AddressSpaceLike, NamespaceLike, DeviceConfig } from '../types/index.ts';
 
 const logger = createModuleLogger('address-space');
@@ -21,6 +22,7 @@ export class DeviceManager {
         private readonly addressSpace: AddressSpaceLike,
         private readonly namespace: NamespaceLike,
         private readonly metrics?: MetricsService,
+        private readonly tagRuntime?: TagRuntime,
     ) { }
 
     load(): void {
@@ -44,7 +46,7 @@ export class DeviceManager {
 
         let node: DeviceNode;
         try {
-            node = createDevice(this.namespace, config, this.metrics);
+            node = createDevice(this.namespace, config, this.metrics, this.tagRuntime, key);
         } catch (err) {
             logAppError(
                 logger,
@@ -80,6 +82,7 @@ export class DeviceManager {
 
         this.devices.delete(key);
         this.metrics?.recordDeviceRemoved(key);
+        this.tagRuntime?.unregisterDevice(key);
         for (const tag of entry.config.tags) {
             this.metrics?.recordTagRemoved(tag.type);
         }
