@@ -9,6 +9,7 @@ import { ControlServer, getControlSocketPath } from '../control/index.ts';
 import type { ReloadResult, InfoResult, ResolvedTag, TagSelector, TagValue } from '../control/index.ts';
 import { TagRuntime } from '../tags/tag-runtime.ts';
 import { resolveTagSelector } from '../devices/resolve-tags.ts';
+import { readCertificateSummary } from '../utils/index.ts';
 import type { SessionLike } from '../types/index.ts';
 
 const CONTROL_HEARTBEAT_INTERVAL_MS = 5000;
@@ -49,6 +50,7 @@ export class OPCUAServerManager {
             const endpointUrl = endpoint?.endpointDescriptions()[0]?.endpointUrl;
 
             this.metrics.setStatus('running');
+            this.logCertificateInfo();
             this.startMetricsLogging();
             this.startControlChannel();
             this.logger.info('Server listening (Ctrl+C to stop)');
@@ -144,6 +146,37 @@ export class OPCUAServerManager {
             this.controlServer.publish('heartbeat', { time: new Date().toISOString() });
         }, CONTROL_HEARTBEAT_INTERVAL_MS);
         this.controlHeartbeatTimer.unref();
+    }
+
+    /**
+     * Logged first thing on every start — same certificate data `opcua-server cert`
+     * shows, from the same shared reader (src/utils/certificate-info.ts), so a look at
+     * the startup log alone tells you which certificate a client would need to trust
+     * (see README's "Server certificate" section) without a separate command. Never
+     * fails startup itself: an unreadable/missing certificate is logged and skipped
+     * rather than thrown, since by this point node-opcua has already accepted it (or
+     * generated a fresh one) to get this far.
+     */
+    private logCertificateInfo(): void {
+        try {
+            const summary = readCertificateSummary(serverOptions.certificateFile);
+            if (!summary) {
+                this.logger.warn({ certificateFile: serverOptions.certificateFile }, 'certificate_not_found');
+                return;
+            }
+
+            this.logger.info(
+                {
+                    path: summary.path,
+                    subject: summary.subject,
+                    validFrom: summary.notBefore.toISOString(),
+                    validTo: summary.notAfter.toISOString(),
+                },
+                'certificate',
+            );
+        } catch (err) {
+            this.logger.warn({ err, certificateFile: serverOptions.certificateFile }, 'Failed to read certificate info');
+        }
     }
 
     private handleReloadRequest(): ReloadResult {
