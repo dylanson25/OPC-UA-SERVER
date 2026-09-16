@@ -140,6 +140,43 @@ describe('OPCUAServerManager control channel integration', () => {
         client.disconnect();
     });
 
+    it('export-nodeset returns real NodeSet2 XML describing the loaded devices/tags', async () => {
+        const client = new ControlClient(getControlSocketPath(port));
+        await client.connect();
+
+        const result = await client.request<{ xml: string }>('export-nodeset');
+
+        expect(result.xml).toContain('<UANodeSet');
+        expect(result.xml).toContain('</UANodeSet>');
+        // Real address-space content, not a stub — the actual devices.json tags/devices
+        // this manager loaded should show up as browse names in the exported model.
+        expect(result.xml).toContain('Temperature');
+        expect(result.xml).toContain('CycleCount');
+
+        client.disconnect();
+    });
+
+    it('opcua-server export-nodeset writes real XML to stdout and exits SUCCESS', async () => {
+        const exitSpy = mockProcessExit();
+        const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        try {
+            const program = createProgram();
+            silenceCommanderOutput(program);
+
+            await expect(
+                program.parseAsync(['export-nodeset', '--port', String(port)], { from: 'user' }),
+            ).rejects.toBeInstanceOf(ProcessExitSignal);
+
+            expect(exitSpy).toHaveBeenNthCalledWith(1, ExitCode.SUCCESS);
+            expect(stdoutWriteSpy).toHaveBeenCalledTimes(1);
+            const written = stdoutWriteSpy.mock.calls[0][0] as string;
+            expect(written).toContain('<UANodeSet');
+        } finally {
+            exitSpy.mockRestore();
+            stdoutWriteSpy.mockRestore();
+        }
+    });
+
     it('opcua-server healthcheck exits ExitCode.SUCCESS while the server is healthy', async () => {
         const exitSpy = mockProcessExit();
         try {
