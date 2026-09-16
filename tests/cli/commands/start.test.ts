@@ -9,7 +9,14 @@ vi.mock('../../../src/server-runner.ts', () => ({
 import { createProgram } from '../../../src/cli/program.ts';
 import { silenceCommanderOutput } from '../process-exit-helper.ts';
 
-const ENV_KEYS = ['HOSTNAME', 'PORT', 'LOG_LEVEL', 'DEVICES_CONFIG_PATH'] as const;
+const ENV_KEYS = [
+    'HOSTNAME',
+    'PORT',
+    'LOG_LEVEL',
+    'DEVICES_CONFIG_PATH',
+    'CERTIFICATE_FILE',
+    'PRIVATE_KEY_FILE',
+] as const;
 
 beforeEach(() => {
     mockedStartServer.mockClear();
@@ -60,6 +67,20 @@ describe('start command', () => {
         await runStart(['--config', './configs/plc-line-1.json']);
 
         expect(process.env.DEVICES_CONFIG_PATH).toBe('./configs/plc-line-1.json');
+    });
+
+    it('sets CERTIFICATE_FILE only when --certificate-file is passed', async () => {
+        await runStart(['--certificate-file', './certs/my-cert.pem']);
+
+        expect(process.env.CERTIFICATE_FILE).toBe('./certs/my-cert.pem');
+        expect(process.env.PRIVATE_KEY_FILE).toBeUndefined();
+    });
+
+    it('sets PRIVATE_KEY_FILE only when --private-key-file is passed', async () => {
+        await runStart(['--private-key-file', './certs/my-key.pem']);
+
+        expect(process.env.PRIVATE_KEY_FILE).toBe('./certs/my-key.pem');
+        expect(process.env.CERTIFICATE_FILE).toBeUndefined();
     });
 
     it('sets all four overrides together (the combined example from the issue)', async () => {

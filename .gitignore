@@ -15,6 +15,9 @@ yarn-error.log*
 pnpm-debug.log*
 logs/
 
+# OPC UA server identity cert/key — auto-generated or supplied locally, never shared
+certs/
+
 # OS files
 .DS_Store
 Thumbs.db
