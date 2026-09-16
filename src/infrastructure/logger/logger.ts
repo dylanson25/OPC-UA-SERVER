@@ -25,7 +25,10 @@ const transport = pino.transport({
                 options: {
                     colorize: true,
                     translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
-                    ignore: 'pid, hostname',
+                    // No spaces after commas: pino-pretty splits this on literal ','
+                    // without trimming, so 'pid, hostname' silently never matched
+                    // ' hostname' (leading space) against the real key `hostname`.
+                    ignore: 'pid,hostname,service,env',
                     destination: 1,
                 },
             }
