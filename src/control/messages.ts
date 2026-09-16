@@ -59,3 +59,8 @@ export interface TagChangeEvent extends ResolvedTag {
     significant: boolean;
     timestamp: string;
 }
+
+/** `export-nodeset`'s response — the server's own namespace as standard NodeSet2 XML. */
+export interface ExportNodesetResult {
+    xml: string;
+}
