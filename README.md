@@ -35,12 +35,41 @@ Server connection settings are read from environment variables (via `.env`, load
 | `NODE_ENV`     | `development`    | `development` enables pretty-printed logs; any other value uses plain JSON logs.          |
 | `LOG_LEVEL`    | `debug` (dev) / `info` (prod) | Minimum [pino](https://getpino.io/) log level.                             |
 | `METRICS_LOG_INTERVAL_MS` | `0` (disabled) | If set to a positive number, logs a periodic metrics summary at that interval (ms). |
+| `CERTIFICATE_FILE` | `./certs/own/certs/certificate.pem` | This server's OPC UA identity certificate. Auto-generated (self-signed) on first `start` if missing — see "Server certificate" below. |
+| `PRIVATE_KEY_FILE`  | `./certs/own/private/private_key.pem` | Private key matching `CERTIFICATE_FILE`. |
 
 The full endpoint URL a client should connect to is:
 
 ```
 opc.tcp://<HOSTNAME>:<PORT><RESOURCEPATH>
 ```
+
+### Server certificate
+
+The OPC UA endpoint always presents a certificate — by default, node-opcua auto-generates a self-signed one (10-year validity) the first time it doesn't find one at `CERTIFICATE_FILE`. Unlike node-opcua's own out-of-the-box default (a per-OS-user-profile folder, e.g. `%APPDATA%/node-opcua-default-nodejs` on Windows — invisible unless you go looking, and lost on every restart if it's inside an ephemeral container), this project always roots its PKI store in a project-relative `certs/` folder instead ([`src/config/server-config.ts`](src/config/server-config.ts) constructs an `OPCUACertificateManager` pointed there), so it's easy to find and easy to persist.
+
+Many OPC UA clients (e.g. Siemens TIA Portal) reject an unrecognized self-signed certificate by default — that's expected; either install it into the client's trusted store, or supply your own certificate from a real CA/your IT department:
+
+```bash
+opcua-server cert                          # show where it lives and its details
+opcua-server cert --out ./server-cert.pem  # also copy it out, e.g. to hand to a client
+```
+
+```
+Certificate: Z:\Documents\OPC UA SERVER\certs\own\certs\certificate.pem
+Subject:     CN=NodeOPCUA@MYHOST
+Valid from:  2026-04-15T00:00:00.000Z
+Valid to:    2036-04-12T00:00:00.000Z
+```
+
+To use your own certificate instead of the auto-generated one, either drop it straight into `certs/own/certs/certificate.pem` (+ matching `certs/own/private/private_key.pem`), or point `CERTIFICATE_FILE`/`PRIVATE_KEY_FILE` anywhere else entirely:
+
+```bash
+opcua-server start --certificate-file ./certs/my-cert.pem --private-key-file ./certs/my-key.pem
+# or via .env: CERTIFICATE_FILE=... / PRIVATE_KEY_FILE=...
+```
+
+node-opcua only ever generates a new certificate when the configured path doesn't already exist — an existing file (yours or a previously auto-generated one) is always reused as-is.
 
 e.g. `opc.tcp://127.0.0.1:4840/UA/`
 
@@ -69,7 +98,7 @@ Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shu
 
 ## CLI
 
-A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck`/`watch`/`get`.
+A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck`/`watch`/`get`/`cert`.
 
 ```bash
 opcua-server --help
@@ -89,6 +118,8 @@ opcua-server start --config ./configs/plc-line-1.json --hostname 192.168.0.150 -
 | `--hostname <address>` | `HOSTNAME` |
 | `--port <number>` | `PORT` |
 | `--log-level <level>` | `LOG_LEVEL` — one of `fatal, error, warn, info, debug, trace, silent`. |
+| `--certificate-file <path>` | `CERTIFICATE_FILE` — see "Server certificate" above. |
+| `--private-key-file <path>` | `PRIVATE_KEY_FILE` |
 
 Overrides are applied **in memory only** for that run — nothing is written back to `.env` or any config file. Priority is CLI flag > environment variable > default; a flag left unset falls through to whatever `.env`/the environment already has.
 
@@ -115,6 +146,13 @@ PLC1.tags.1.nodeId
 
 Reason:
 Duplicate nodeId: 'ns=1;s=Dup'.
+```
+
+**`cert`** — shows (or exports) this server's own OPC UA certificate, standalone like `start`/`validate` (no running server needed) — see "Server certificate" above for the full picture:
+
+```bash
+opcua-server cert
+opcua-server cert --out ./server-cert.pem
 ```
 
 ### Talking to an already-running server
@@ -275,6 +313,16 @@ docker run --rm -p 4840:48040 -v ./my-devices:/app/devices opcua-server
 
 `findDevicesDirectory()` checks `/app/devices` before falling back to the image's built-in default, so the mounted file wins — no rebuild needed. Hot-reload (see above) works the same way inside the container: edit the mounted file and the running server picks it up.
 
+### Persisting (or supplying) the server certificate
+
+The image never bakes in a certificate (see "Server certificate" above — a private key baked into a shared image would mean every container from it shares the same identity, and it'd defeat the point of a per-deployment cert). By default `CERTIFICATE_FILE`/`PRIVATE_KEY_FILE` resolve to `/app/certs/...` inside the container (same `./certs`-relative-to-cwd default as running locally) — without a mount, that's the container's own ephemeral filesystem, so a fresh self-signed cert is generated on every `docker run`. Mount a volume to keep the same identity across restarts, or to supply your own certificate:
+
+```bash
+docker run --rm -p 4840:48040 -v ./my-certs:/app/certs opcua-server
+```
+
+`opcua-server cert` (see above) works the same way inside the container — run it via `docker exec <container> node dist/cli/bin.js cert` to inspect whatever certificate that container is actually using.
+
 ### Health check
 
 The image defines a `HEALTHCHECK` that runs `opcua-server healthcheck` (#39) — it talks to the running server over the same control channel `info` uses, so "healthy" reflects real server status (`MetricsService`), not just "the port accepts a TCP connection". Check status with:
@@ -389,9 +437,10 @@ src/
 │       ├── info.ts              # opcua-server info
 │       ├── healthcheck.ts       # opcua-server healthcheck
 │       ├── watch.ts             # opcua-server watch
-│       └── get.ts               # opcua-server get
+│       ├── get.ts               # opcua-server get
+│       └── cert.ts              # opcua-server cert
 ├── config/
-│   └── server-config.ts         # Reads env vars into OPCUAServer options
+│   └── server-config.ts         # Reads env vars into OPCUAServer options, incl. certificateFile/privateKeyFile
 ├── core/
 │   └── opcua-server-manager.ts  # Lifecycle: initialize -> build address space -> start -> shutdown
 ├── devices/
