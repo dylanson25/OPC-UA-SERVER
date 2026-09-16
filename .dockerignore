@@ -15,6 +15,9 @@ coverage
 .vitest
 *.test.ts.snap
 
+# Never bake a server identity cert/key into the image — mount it as a volume instead
+certs
+
 tests
 
 .vscode
