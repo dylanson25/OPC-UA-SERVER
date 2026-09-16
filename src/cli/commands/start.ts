@@ -8,6 +8,8 @@ interface StartOptions {
     hostname?: string;
     port?: number;
     logLevel?: string;
+    certificateFile?: string;
+    privateKeyFile?: string;
 }
 
 /**
@@ -22,6 +24,8 @@ function applyOverrides(options: StartOptions): void {
     if (options.hostname) process.env.HOSTNAME = options.hostname;
     if (options.port !== undefined) process.env.PORT = String(options.port);
     if (options.logLevel) process.env.LOG_LEVEL = options.logLevel;
+    if (options.certificateFile) process.env.CERTIFICATE_FILE = options.certificateFile;
+    if (options.privateKeyFile) process.env.PRIVATE_KEY_FILE = options.privateKeyFile;
 }
 
 export function registerStartCommand(program: Command): void {
@@ -32,6 +36,8 @@ export function registerStartCommand(program: Command): void {
         .option('--hostname <address>', 'Override the OPC UA server hostname')
         .option('--port <number>', 'Override the OPC UA endpoint port', parseTargetPort)
         .option('--log-level <level>', `Override the log level (${PINO_LOG_LEVELS.join(', ')})`, parseLogLevel)
+        .option('--certificate-file <path>', 'Use this certificate instead of the auto-generated ./certs one')
+        .option('--private-key-file <path>', 'Private key matching --certificate-file')
         .addHelpText(
             'after',
             [
@@ -40,6 +46,7 @@ export function registerStartCommand(program: Command): void {
                 '  $ opcua-server start',
                 '  $ opcua-server start --config ./configs/production.json',
                 '  $ opcua-server start --hostname 192.168.0.150 --port 4880 --log-level debug',
+                '  $ opcua-server start --certificate-file ./certs/my-cert.pem --private-key-file ./certs/my-key.pem',
                 '  $ opcua-server start \\',
                 '      --config ./configs/plc-line-1.json \\',
                 '      --hostname 192.168.0.150 \\',
