@@ -98,7 +98,7 @@ Stop the server gracefully with `Ctrl+C` (`SIGINT`/`SIGTERM` trigger a clean shu
 
 ## CLI
 
-A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck`/`watch`/`get`/`cert`.
+A [commander.js](https://github.com/tj/commander.js)-based `opcua-server` binary ([`src/cli/`](src/cli/), entry point [`src/cli/bin.ts`](src/cli/bin.ts)) is installed alongside the package (`"bin"` in `package.json`) and provides `start`/`validate`/`reload`/`info`/`healthcheck`/`watch`/`get`/`cert`/`export-nodeset`.
 
 ```bash
 opcua-server --help
@@ -287,6 +287,15 @@ opcua-server watch --device plc1 --log-level trace
 
 `Ctrl+C` disconnects cleanly — the control channel's own socket-close handling (see [`src/control/control-server.ts`](src/control/control-server.ts)) tears down the subscription server-side, so no stray subscription is left running after `watch` exits.
 
+**`export-nodeset`** — exports the running server's address space as standard **NodeSet2 XML** (the same format tools like UaModeler/UaExpert import/export), backed by node-opcua's own `namespace.toNodeset2XML()`:
+
+```bash
+opcua-server export-nodeset > nodeset2.xml
+opcua-server export-nodeset --out ./nodeset2.xml
+```
+
+Prints the raw XML to stdout by default (safe to pipe/redirect — no extra status text mixed in); `--out <path>` writes it straight to a file instead (creating the destination directory if needed) and prints a short confirmation to stderr.
+
 ## Running with Docker
 
 Build the image (multi-stage: installs full deps to run `tsc`, then a separate production-only `npm ci --omit=dev` layer for the final image):
@@ -438,7 +447,8 @@ src/
 │       ├── healthcheck.ts       # opcua-server healthcheck
 │       ├── watch.ts             # opcua-server watch
 │       ├── get.ts               # opcua-server get
-│       └── cert.ts              # opcua-server cert
+│       ├── cert.ts              # opcua-server cert
+│       └── export-nodeset.ts    # opcua-server export-nodeset
 ├── config/
 │   └── server-config.ts         # Reads env vars into OPCUAServer options, incl. certificateFile/privateKeyFile
 ├── core/

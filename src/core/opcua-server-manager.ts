@@ -6,11 +6,19 @@ import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { ConfigurationError, ErrorCode, RuntimeError, ServerError, logAppError } from '../errors/index.ts';
 import { MetricsService } from '../metrics/index.ts';
 import { ControlServer, getControlSocketPath } from '../control/index.ts';
-import type { ReloadResult, InfoResult, ResolvedTag, TagSelector, TagValue } from '../control/index.ts';
+import type {
+    ReloadResult,
+    InfoResult,
+    ResolvedTag,
+    TagSelector,
+    TagValue,
+    ExportNodesetResult,
+} from '../control/index.ts';
 import { TagRuntime } from '../tags/tag-runtime.ts';
 import { resolveTagSelector } from '../devices/resolve-tags.ts';
 import { readCertificateSummary } from '../utils/index.ts';
 import type { SessionLike } from '../types/index.ts';
+import type { INamespace } from 'node-opcua-address-space-base';
 
 const CONTROL_HEARTBEAT_INTERVAL_MS = 5000;
 
@@ -27,6 +35,7 @@ export class OPCUAServerManager {
     private isShuttingDown = false;
     private deviceManager: DeviceManager | null = null;
     private configWatcher: ConfigWatcher | null = null;
+    private namespace: INamespace | null = null;
 
     constructor() {
         this.server = new OPCUAServer(serverOptions);
@@ -119,10 +128,10 @@ export class OPCUAServerManager {
 
     /**
      * Registers every request handler the control channel (#37) currently serves —
-     * the `ping`/`heartbeat` reference pair from #37 itself, `reload`/`info` (#38), and
-     * `tags.resolve`/`tags.get` plus the `tag-updates` event channel (#40). Future
-     * commands register their own handlers here the same way rather than opening a
-     * separate channel.
+     * the `ping`/`heartbeat` reference pair from #37 itself, `reload`/`info` (#38),
+     * `tags.resolve`/`tags.get` plus the `tag-updates` event channel (#40), and
+     * `export-nodeset`. Future commands register their own handlers here the same way
+     * rather than opening a separate channel.
      */
     private startControlChannel(): void {
         this.controlServer.registerHandler('ping', () => ({
@@ -134,6 +143,7 @@ export class OPCUAServerManager {
         this.controlServer.registerHandler('info', () => this.handleInfoRequest());
         this.controlServer.registerHandler('tags.resolve', (payload) => this.handleTagsResolve(payload));
         this.controlServer.registerHandler('tags.get', (payload) => this.handleTagsGet(payload));
+        this.controlServer.registerHandler('export-nodeset', () => this.handleExportNodeset());
 
         // Every tag write (significant or not) republished for `watch` (#40) to filter
         // client-side by nodeId/significance — no-ops via ControlServer.publish() when
@@ -228,6 +238,21 @@ export class OPCUAServerManager {
         }));
     }
 
+    /**
+     * The server's own namespace (devices + tags) as standard NodeSet2 XML — the same
+     * format tools like UaModeler/UaExpert import/export. `namespace.toNodeset2XML()`
+     * is node-opcua's own address-space serializer; this just exposes it over the
+     * control channel rather than re-implementing NodeSet2 output.
+     */
+    private handleExportNodeset(): ExportNodesetResult {
+        if (!this.namespace) {
+            // Unreachable in practice — same reasoning as handleReloadRequest() above.
+            throw new RuntimeError(ErrorCode.UNKNOWN_ERROR, 'Address space not initialized');
+        }
+
+        return { xml: this.namespace.toNodeset2XML() };
+    }
+
     private handleInfoRequest(): InfoResult {
         const status = this.metrics.getStatus();
 
@@ -271,6 +296,7 @@ export class OPCUAServerManager {
     private buildAddressSpace(): void {
         const addressSpace = this.server.engine.addressSpace;
         const namespace = addressSpace.getOwnNamespace();
+        this.namespace = namespace;
 
         this.deviceManager = new DeviceManager(addressSpace, namespace, this.metrics, this.tagRuntime);
         this.deviceManager.load();

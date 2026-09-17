@@ -10,6 +10,7 @@ import { registerHealthcheckCommand } from './commands/healthcheck.ts';
 import { registerWatchCommand } from './commands/watch.ts';
 import { registerGetCommand } from './commands/get.ts';
 import { registerCertCommand } from './commands/cert.ts';
+import { registerExportNodesetCommand } from './commands/export-nodeset.ts';
 
 /**
  * Builds the root `opcua-server` Command — exported (not just executed) so tests can
@@ -36,6 +37,7 @@ export function createProgram(): Command {
                 '  $ opcua-server watch --device plc1',
                 '  $ opcua-server get --device plc1',
                 '  $ opcua-server cert',
+                '  $ opcua-server export-nodeset --out ./nodeset2.xml',
                 '  $ opcua-server --version',
                 '',
             ].join('\n'),
@@ -62,6 +64,7 @@ export function createProgram(): Command {
     registerWatchCommand(program);
     registerGetCommand(program);
     registerCertCommand(program);
+    registerExportNodesetCommand(program);
 
     return program;
 }
