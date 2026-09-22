@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
 
 import { buildTagSelectorPayload } from '../../src/cli/tag-selector.ts';
-import { ErrorCode, ValidationError } from '../../src/errors/index.ts';
+import { ValidationError } from '../../src/errors/index.ts';
 
 describe('buildTagSelectorPayload', () => {
-    it('throws ValidationError(TAG_SELECTOR_INVALID) when nothing is given', () => {
-        expect(() => buildTagSelectorPayload({}, { allowTags: false })).toThrowError(
-            expect.objectContaining({ code: ErrorCode.TAG_SELECTOR_INVALID }),
-        );
+    it('builds an empty-selector payload (every tag on every device) when nothing is given', () => {
+        expect(buildTagSelectorPayload({}, { allowTags: false })).toEqual({
+            device: undefined,
+            nodeId: undefined,
+            browseName: undefined,
+            tags: undefined,
+        });
     });
 
     it('builds a device-only payload', () => {

@@ -134,10 +134,11 @@ The check itself is bounded by `--timeout` (`connect` and the `info` request eac
 
 ## Inspecting tag values: `watch` and `get`
 
-`watch` and `get` share one selector for picking which tag(s) to look at — exactly one of `--device`, `--node-id`, or `--browse-name`:
+`watch` and `get` share one selector for picking which tag(s) to look at — exactly one of `--device`, `--node-id`, or `--browse-name`, or none at all for every tag on every device:
 
 | Flag | Selects |
 | --- | --- |
+| *(none)* | Every tag on every device. |
 | `--device <key>` | Every tag on that device (or a `--tags` subset — `get` only). |
 | `--node-id <id>` | The single tag with that exact NodeId. Can't combine with `--device`/`--browse-name`/`--tags`. |
 | `--browse-name <name>` | The tag(s) with that browse name. If more than one device has a tag with that name, add `--device` to disambiguate — that's the *only* combination `--browse-name` accepts. |
@@ -157,6 +158,7 @@ Multiple tags named "Temperature" found — specify --device to disambiguate:
 **`get`** — reads the **current** value of one or more tags once and exits. Backed by the same `tags.get` control-channel request `watch` resolves against, but reads the live value directly rather than waiting for a change — so it returns instantly even for a tag that never changes:
 
 ```bash
+opcua-server get
 opcua-server get --device plc1
 opcua-server get --node-id "ns=2;s=PLC1.Temperature1"
 opcua-server get --browse-name Temperature1
@@ -172,6 +174,7 @@ plc1.HomeSwitchStatus    true
 **`watch`** — streams real-time tag value changes until you stop it with `Ctrl+C`:
 
 ```bash
+opcua-server watch
 opcua-server watch --device plc1
 opcua-server watch --node-id "ns=2;s=PLC1.Temperature1"
 opcua-server watch --browse-name Temperature1
@@ -207,3 +210,12 @@ opcua-server start --nodeset-file ./nodeset.xml --nodeset-file ./other.xml
 ```
 
 A file that doesn't exist is logged as a `NODESET_FILE_NOT_FOUND` `ConfigurationError` and skipped rather than aborting startup — check the logs if an imported node doesn't show up. The file must be self-contained (or its `<RequiredModel>`/`<Uri>` dependencies covered by another `--nodeset-file`) — `--nodeset-file` doesn't currently resolve external model dependencies the way `nodesetCatalog`'s built-in `dependencies` do.
+
+Every top-level `UAObject` an imported file organizes under the standard Objects folder is also watchable/readable with `watch`/`get`, exactly like a devices.json device — its browse name is the `--device` key (quote it if it has spaces):
+
+```bash
+opcua-server get --device "1360 TRIM"
+opcua-server watch --device "1360 TRIM"
+```
+
+A `--tags`/`--browse-name`/`--node-id` on one of its variables works the same way too. Only variables whose DataType maps to one of this project's own tag types (boolean/integer/float/double/string/dateTime) are exposed this way — anything else (e.g. a `NodeId` or `ExtensionObject`-typed variable) is skipped, logged as a warning.

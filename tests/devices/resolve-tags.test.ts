@@ -152,8 +152,19 @@ describe('resolveTagSelector', () => {
     });
 
     describe('no selector at all', () => {
-        it('throws rather than silently resolving nothing (defensive — the CLI never sends this)', () => {
-            expect(() => resolveTagSelector(devices, {})).toThrow();
+        it('resolves every tag on every device', () => {
+            const result = resolveTagSelector(devices, {});
+
+            expect(result).toEqual([
+                { device: 'PLC1', deviceName: 'PLC 1', browseName: 'Temperature', nodeId: 'ns=1;s=PLC1.Temperature', type: 'float' },
+                { device: 'PLC1', deviceName: 'PLC 1', browseName: 'CycleCount', nodeId: 'ns=1;s=PLC1.CycleCount', type: 'integer' },
+                { device: 'PLC1', deviceName: 'PLC 1', browseName: 'HomeSwitchStatus', nodeId: 'ns=1;s=PLC1.HomeSwitchStatus', type: 'boolean' },
+                { device: 'PLC2', deviceName: 'PLC 2', browseName: 'Temperature', nodeId: 'ns=1;s=PLC2.Temperature', type: 'float' },
+            ]);
+        });
+
+        it('resolves to an empty list when there are no devices at all', () => {
+            expect(resolveTagSelector([], {})).toEqual([]);
         });
     });
 });

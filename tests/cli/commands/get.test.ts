@@ -174,13 +174,28 @@ describe('get command', () => {
         });
     });
 
-    it('exits ExitCode.VALIDATION_ERROR when no selector is given, without ever connecting', async () => {
+    it('reads every tag on every device when no selector is given, and exits SUCCESS', async () => {
+        mockedConnect.mockResolvedValue(undefined);
+        mockedRequest.mockResolvedValue([
+            {
+                device: 'PLC1',
+                deviceName: 'PLC 1',
+                browseName: 'Temperature1',
+                nodeId: 'ns=2;s=PLC1.Temperature1',
+                type: 'float',
+                value: 72.6,
+            },
+        ]);
+
         await expect(runGet()).rejects.toBeInstanceOf(ProcessExitSignal);
 
-        expect(exitSpy).toHaveBeenNthCalledWith(1, ExitCode.VALIDATION_ERROR);
-        expect(mockedConnect).not.toHaveBeenCalled();
-        const output = errorSpy.mock.calls.map((call) => call[0]).join('\n');
-        expect(output).toContain('TAG_SELECTOR_INVALID');
+        expect(exitSpy).toHaveBeenNthCalledWith(1, ExitCode.SUCCESS);
+        expect(mockedRequest).toHaveBeenCalledWith('tags.get', {
+            device: undefined,
+            nodeId: undefined,
+            browseName: undefined,
+            tags: undefined,
+        });
     });
 
     it('exits ExitCode.VALIDATION_ERROR when --tags is combined with --browse-name', async () => {
