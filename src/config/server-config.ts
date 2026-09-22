@@ -10,6 +10,15 @@ const resourcePath = process.env.RESOURCEPATH || '/UA/';
 const hostname = process.env.HOSTNAME || '127.0.0.1';
 const productName = process.env.PRODUCTNAME || 'OPCUA-Server';
 
+// Extra NodeSet2 XML files to import on top of the standard UA nodeset — comma-separated
+// paths, e.g. `NODESET_FILES=./nodeset.xml,./other.xml`. See `start --nodeset-file`
+// (cli/commands/start.ts), which sets this same env var, and how it's consumed in
+// opcua-server-manager.ts.
+const nodesetFiles = (process.env.NODESET_FILES || '')
+  .split(',')
+  .map((p) => p.trim())
+  .filter((p) => p.length > 0);
+
 // A PKI store rooted in a project-relative `certs/` folder (self-initializing its own
 // own/certs, own/private, trusted, rejected, issuers subfolders — see
 // OPCUACertificateManager) rather than node-opcua's own default, which otherwise lives
@@ -43,6 +52,7 @@ export const serverOptions: ServerOptions = {
   certificateFile,
   privateKeyFile,
   serverCertificateManager,
+  nodesetFiles,
   buildInfo: {
     productName: productName,
     buildNumber: '7658',
