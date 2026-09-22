@@ -22,6 +22,7 @@ opcua-server start --config ./configs/plc-line-1.json --hostname 192.168.0.150 -
 | `--log-level <level>` | `LOG_LEVEL` — one of `fatal, error, warn, info, debug, trace, silent`. |
 | `--certificate-file <path>` | `CERTIFICATE_FILE` — see the main README's ["Server certificate"](../README.md#server-certificate) section. |
 | `--private-key-file <path>` | `PRIVATE_KEY_FILE` |
+| `--nodeset-file <path>` (repeatable) | `NODESET_FILES` — extra NodeSet2 XML file(s) to import into the address space alongside the standard UA nodeset, e.g. a file produced by `export-nodeset` or UaModeler. |
 
 Overrides are applied **in memory only** for that run — nothing is written back to `.env` or any config file. Priority is CLI flag > environment variable > default; a flag left unset falls through to whatever `.env`/the environment already has.
 
@@ -197,3 +198,12 @@ opcua-server export-nodeset --out ./nodeset2.xml
 ```
 
 Prints the raw XML to stdout by default (safe to pipe/redirect — no extra status text mixed in); `--out <path>` writes it straight to a file instead (creating the destination directory if needed) and prints a short confirmation to stderr.
+
+**Importing a NodeSet2 XML file** — the reverse direction, at server startup: pass it to `start --nodeset-file` (repeatable, or `NODESET_FILES`, comma-separated), and node-opcua loads it into the address space alongside the standard UA nodeset when the server initializes:
+
+```bash
+opcua-server start --nodeset-file ./nodeset.xml
+opcua-server start --nodeset-file ./nodeset.xml --nodeset-file ./other.xml
+```
+
+A file that doesn't exist is logged as a `NODESET_FILE_NOT_FOUND` `ConfigurationError` and skipped rather than aborting startup — check the logs if an imported node doesn't show up. The file must be self-contained (or its `<RequiredModel>`/`<Uri>` dependencies covered by another `--nodeset-file`) — `--nodeset-file` doesn't currently resolve external model dependencies the way `nodesetCatalog`'s built-in `dependencies` do.

@@ -1,4 +1,7 @@
+import fs from 'node:fs';
+
 import { OPCUAServer } from 'node-opcua';
+import { nodesets } from 'node-opcua-nodesets';
 
 import { serverOptions } from '../config/server-config.ts';
 import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
@@ -38,7 +41,39 @@ export class OPCUAServerManager {
     private namespace: INamespace | null = null;
 
     constructor() {
-        this.server = new OPCUAServer(serverOptions);
+        const { nodesetFiles, ...opcuaOptions } = serverOptions;
+
+        this.server = new OPCUAServer({
+            ...opcuaOptions,
+            nodeset_filename: [nodesets.standard, ...this.resolveNodesetFiles(nodesetFiles)],
+        });
+    }
+
+    /**
+     * Validates each extra NodeSet2 XML file (NODESET_FILES / `start --nodeset-file`)
+     * exists before handing the list to node-opcua — an unreadable path there fails
+     * deep inside its own XML parser with a much less useful error. A missing file is
+     * logged and skipped rather than aborting the whole server: consistent with how
+     * config-reader.ts's findDevicesDirectory() degrades instead of crashing on a bad
+     * path. `nodesets.standard` itself is prepended by the constructor, not here —
+     * passing our own `nodeset_filename` array to OPCUAServer fully replaces
+     * node-opcua's default (server_engine.ts only falls back to the standard nodeset
+     * when the option is omitted entirely), so losing it would leave even the base UA
+     * types unregistered.
+     */
+    private resolveNodesetFiles(files: string[]): string[] {
+        return files.filter((file) => {
+            if (fs.existsSync(file)) return true;
+
+            logAppError(
+                this.logger,
+                new ConfigurationError(ErrorCode.NODESET_FILE_NOT_FOUND, 'NodeSet2 XML file not found, skipping', {
+                    file,
+                }),
+            );
+            this.metrics.recordError('ConfigurationError');
+            return false;
+        });
     }
 
     initialize(): void {

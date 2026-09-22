@@ -16,6 +16,12 @@ export interface ServerOptions {
   /** PKI store (trust/reject/issuers + own cert/key) rooted in the project's certs/ folder. */
   serverCertificateManager: OPCUACertificateManager;
   buildInfo: ServerBuildInfo;
+  /**
+   * Extra NodeSet2 XML files to import alongside the standard UA nodeset — e.g. a file
+   * exported by `export-nodeset` or produced by UaModeler. See NODESET_FILES /
+   * `start --nodeset-file` in server-config.ts / cli/commands/start.ts.
+   */
+  nodesetFiles: string[];
 }
 
 export interface SessionLike {

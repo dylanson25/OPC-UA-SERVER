@@ -10,6 +10,13 @@ interface StartOptions {
     logLevel?: string;
     certificateFile?: string;
     privateKeyFile?: string;
+    nodesetFile?: string[];
+}
+
+/** commander `--nodeset-file` accumulator: repeatable flag collected into an array. */
+function collect(value: string, previous: string[]): string[] {
+    previous.push(value);
+    return previous;
 }
 
 /**
@@ -26,6 +33,7 @@ function applyOverrides(options: StartOptions): void {
     if (options.logLevel) process.env.LOG_LEVEL = options.logLevel;
     if (options.certificateFile) process.env.CERTIFICATE_FILE = options.certificateFile;
     if (options.privateKeyFile) process.env.PRIVATE_KEY_FILE = options.privateKeyFile;
+    if (options.nodesetFile?.length) process.env.NODESET_FILES = options.nodesetFile.join(',');
 }
 
 export function registerStartCommand(program: Command): void {
@@ -38,6 +46,12 @@ export function registerStartCommand(program: Command): void {
         .option('--log-level <level>', `Override the log level (${PINO_LOG_LEVELS.join(', ')})`, parseLogLevel)
         .option('--certificate-file <path>', 'Use this certificate instead of the auto-generated ./certs one')
         .option('--private-key-file <path>', 'Private key matching --certificate-file')
+        .option(
+            '--nodeset-file <path>',
+            'Import an extra NodeSet2 XML file into the address space (repeatable)',
+            collect,
+            [] as string[],
+        )
         .addHelpText(
             'after',
             [
@@ -47,6 +61,7 @@ export function registerStartCommand(program: Command): void {
                 '  $ opcua-server start --config ./configs/production.json',
                 '  $ opcua-server start --hostname 192.168.0.150 --port 4880 --log-level debug',
                 '  $ opcua-server start --certificate-file ./certs/my-cert.pem --private-key-file ./certs/my-key.pem',
+                '  $ opcua-server start --nodeset-file ./nodeset.xml --nodeset-file ./other.xml',
                 '  $ opcua-server start \\',
                 '      --config ./configs/plc-line-1.json \\',
                 '      --hostname 192.168.0.150 \\',
