@@ -19,7 +19,8 @@ export interface TagSelectorBuildOptions {
  * --device / --node-id / --browse-name / --tags selectors, then builds the
  * `TagSelector` payload sent to the server's tags.resolve/tags.get handlers.
  *
- * - At least one of --device / --node-id / --browse-name is required.
+ * - Omitting --device / --node-id / --browse-name entirely selects every tag on
+ *   every device.
  * - --node-id is a fully-qualified identifier on its own: it can't combine with
  *   --device, --browse-name, or --tags.
  * - --browse-name *can* combine with --device — that's the documented way to
@@ -39,10 +40,6 @@ export function buildTagSelectorPayload(
 ): TagSelector {
     const { device, nodeId, browseName } = options;
     const tags = allowTags ? options.tags : undefined;
-
-    if (!device && !nodeId && !browseName) {
-        throw invalid('One of --device, --node-id, or --browse-name is required.');
-    }
 
     if (nodeId && (device || browseName || tags)) {
         throw invalid('--node-id cannot be combined with --device, --browse-name, or --tags.');

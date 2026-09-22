@@ -4,7 +4,7 @@ import { OPCUAServer } from 'node-opcua';
 import { nodesets } from 'node-opcua-nodesets';
 
 import { serverOptions } from '../config/server-config.ts';
-import { DeviceManager, ConfigWatcher } from '../devices/index.ts';
+import { DeviceManager, ConfigWatcher, discoverNodesetDevices } from '../devices/index.ts';
 import { createModuleLogger } from '../infrastructure/logger/index.ts';
 import { ConfigurationError, ErrorCode, RuntimeError, ServerError, logAppError } from '../errors/index.ts';
 import { MetricsService } from '../metrics/index.ts';
@@ -20,7 +20,7 @@ import type {
 import { TagRuntime } from '../tags/tag-runtime.ts';
 import { resolveTagSelector } from '../devices/resolve-tags.ts';
 import { readCertificateSummary } from '../utils/index.ts';
-import type { SessionLike } from '../types/index.ts';
+import type { SessionLike, DeviceConfig } from '../types/index.ts';
 import type { INamespace } from 'node-opcua-address-space-base';
 
 const CONTROL_HEARTBEAT_INTERVAL_MS = 5000;
@@ -38,6 +38,8 @@ export class OPCUAServerManager {
     private isShuttingDown = false;
     private deviceManager: DeviceManager | null = null;
     private configWatcher: ConfigWatcher | null = null;
+    /** Devices synthesized from an imported NodeSet2 XML file (#58) — see nodeset-devices.ts. */
+    private nodesetDevices: { key: string; config: DeviceConfig }[] = [];
     private namespace: INamespace | null = null;
 
     constructor() {
@@ -257,13 +259,7 @@ export class OPCUAServerManager {
     }
 
     private handleTagsResolve(payload: unknown): ResolvedTag[] {
-        const deviceManager = this.deviceManager;
-        if (!deviceManager) {
-            // Unreachable in practice — same reasoning as handleReloadRequest() above.
-            throw new RuntimeError(ErrorCode.UNKNOWN_ERROR, 'Device manager not initialized');
-        }
-
-        return resolveTagSelector(deviceManager.list(), payload as TagSelector);
+        return resolveTagSelector(this.allDeviceEntries(), payload as TagSelector);
     }
 
     private handleTagsGet(payload: unknown): TagValue[] {
@@ -338,6 +334,22 @@ export class OPCUAServerManager {
 
         this.configWatcher = new ConfigWatcher(this.deviceManager);
         this.configWatcher.start();
+
+        // #58: bridge any UAVariable that came from an imported --nodeset-file into
+        // watch/get the same way — see nodeset-devices.ts for why devices.json's own
+        // DeviceManager/TagRuntime wiring doesn't already cover these.
+        this.nodesetDevices = discoverNodesetDevices(addressSpace, namespace.index, this.tagRuntime);
+    }
+
+    /** devices.json devices plus any devices synthesized from an imported nodeset (#58). */
+    private allDeviceEntries(): { key: string; config: DeviceConfig }[] {
+        const deviceManager = this.deviceManager;
+        if (!deviceManager) {
+            // Unreachable in practice — same reasoning as handleReloadRequest() above.
+            throw new RuntimeError(ErrorCode.UNKNOWN_ERROR, 'Device manager not initialized');
+        }
+
+        return [...deviceManager.list(), ...this.nodesetDevices];
     }
 
     private describeSessionClient(session: SessionLike): string {

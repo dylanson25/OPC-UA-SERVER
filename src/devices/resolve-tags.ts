@@ -1,4 +1,4 @@
-import { DeviceError, ErrorCode, RuntimeError, TagError } from '../errors/index.ts';
+import { DeviceError, ErrorCode, TagError } from '../errors/index.ts';
 import type { DeviceConfig } from '../types/index.ts';
 import type { ResolvedTag, TagSelector } from '../control/index.ts';
 
@@ -29,6 +29,7 @@ function toResolved(key: string, config: DeviceConfig, tag: DeviceConfig['tags']
  *      to that one device; with neither, every tag on the device.
  *   3. `browseName` alone — searched across every device; more than one match is
  *      reported as an ambiguity error listing every match, never guessed.
+ *   4. Nothing at all — every tag on every device.
  */
 export function resolveTagSelector(devices: DeviceEntry[], selector: TagSelector): ResolvedTag[] {
     const { device, nodeId, browseName, tags } = selector;
@@ -108,12 +109,7 @@ export function resolveTagSelector(devices: DeviceEntry[], selector: TagSelector
         return matches;
     }
 
-    // Unreachable via the CLI — src/cli/tag-selector.ts already requires one of
-    // device/nodeId/browseName before a request is ever sent — guarded defensively for
-    // any other future caller of this control-channel handler, per this codebase's
-    // usual "log and continue"/"never silently misbehave" philosophy (see #33).
-    throw new RuntimeError(
-        ErrorCode.UNKNOWN_ERROR,
-        'No tag selector provided: specify device, nodeId, or browseName',
-    );
+    // No selector at all (#58's `watch`/`get` with none of --device/--node-id/
+    // --browse-name given) — every tag on every device.
+    return devices.flatMap((entry) => entry.config.tags.map((tag) => toResolved(entry.key, entry.config, tag)));
 }

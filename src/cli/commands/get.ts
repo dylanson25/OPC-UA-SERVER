@@ -15,7 +15,10 @@ export function registerGetCommand(program: Command): void {
     program
         .command('get')
         .description('Read the current value of one or more tags once and exit')
-        .option('--device <key>', 'Read every tag on this device (optionally narrowed by --tags)')
+        .option(
+            '--device <key>',
+            'Read every tag on this device (optionally narrowed by --tags; omit all selectors to read every device)',
+        )
         .option('--node-id <id>', 'Read a single tag by NodeId')
         .option('--browse-name <name>', 'Read a single tag by BrowseName (combine with --device to disambiguate)')
         .option('--tags <list>', 'Comma-separated browse names, scoped to --device')
@@ -25,6 +28,7 @@ export function registerGetCommand(program: Command): void {
             [
                 '',
                 'Examples:',
+                '  $ opcua-server get',
                 '  $ opcua-server get --device plc1',
                 '  $ opcua-server get --node-id "ns=2;s=PLC1.Temperature1"',
                 '  $ opcua-server get --browse-name Temperature1',
@@ -51,7 +55,11 @@ export function registerGetCommand(program: Command): void {
 
             try {
                 const values = await client.request<TagValue[]>('tags.get', selector);
-                printValues(values);
+                if (values.length === 0) {
+                    console.log('No tags found — no devices are configured.');
+                } else {
+                    printValues(values);
+                }
                 process.exit(ExitCode.SUCCESS);
             } catch (err) {
                 reportControlChannelFailure(err, 'Failed to read tag value(s)');

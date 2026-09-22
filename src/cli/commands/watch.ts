@@ -23,7 +23,7 @@ export function registerWatchCommand(program: Command): void {
     program
         .command('watch')
         .description('Stream real-time tag value changes for a device or tag (Ctrl+C to stop)')
-        .option('--device <key>', 'Watch every tag on this device')
+        .option('--device <key>', 'Watch every tag on this device (omit all three selectors to watch every device)')
         .option('--node-id <id>', 'Watch a single tag by NodeId')
         .option('--browse-name <name>', 'Watch a single tag by BrowseName (combine with --device to disambiguate)')
         .option('--port <number>', 'Port of the running server to target', parseTargetPort)
@@ -37,6 +37,7 @@ export function registerWatchCommand(program: Command): void {
             [
                 '',
                 'Examples:',
+                '  $ opcua-server watch',
                 '  $ opcua-server watch --device plc1',
                 '  $ opcua-server watch --node-id "ns=2;s=PLC1.Temperature1"',
                 '  $ opcua-server watch --browse-name Temperature1',
@@ -71,6 +72,12 @@ export function registerWatchCommand(program: Command): void {
             } catch (err) {
                 client.disconnect();
                 reportControlChannelFailure(err, 'Failed to resolve tag selector');
+            }
+
+            if (watched.length === 0) {
+                console.log('No tags to watch — no devices are configured.');
+                client.disconnect();
+                process.exit(ExitCode.SUCCESS);
             }
 
             const nodeIds = new Set(watched.map((tag) => tag.nodeId));
